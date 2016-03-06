@@ -8,6 +8,8 @@ import (
 	"github.com/go-gl/glfw/v3.1/glfw"
 )
 
+
+
 type View interface {
 	View()
 }
@@ -83,5 +85,5 @@ func (d *Director) PlayGame(path string) {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	d.SetView(NewGameView(d, console, path, hash))
+	d.SetView(&GameView{d, console, path, hash, createTexture(), false, nil})
 }

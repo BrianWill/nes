@@ -3,6 +3,7 @@ package ui
 import (
 	"log"
 	"runtime"
+	"image"
 
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
@@ -15,6 +16,38 @@ const (
 	scale  = 3
 	title  = "NES"
 )
+
+const padding = 0
+
+type GameView struct {
+	director *Director
+	console  *nes.Console
+	title    string
+	hash     string
+	texture  uint32
+	record   bool
+	frames   []image.Image
+}
+
+func (view *GameView) onKey(window *glfw.Window,
+	key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+	if action == glfw.Press {
+		switch key {
+		case glfw.KeySpace:
+			screenshot(view.console.Buffer())
+		case glfw.KeyR:
+			view.console.Reset()
+		case glfw.KeyTab:
+			if view.record {
+				view.record = false
+				animation(view.frames)
+				view.frames = nil
+			} else {
+				view.record = true
+			}
+		}
+	}
+}
 
 func init() {
 	// we need a parallel OS thread to avoid audio stuttering
@@ -34,6 +67,25 @@ func Run(paths []string) {
 		log.Fatalln(err)
 	}
 	defer audio.Stop()
+
+	// initialize fontMask
+	{
+		im, err := png.Decode(bytes.NewBuffer(fontData))
+		if err != nil {
+			log.Fatalln(err)
+		}
+		size := im.Bounds().Size()
+		mask := image.NewRGBA(im.Bounds())
+		for y := 0; y < size.Y; y++ {
+			for x := 0; x < size.X; x++ {
+				r, _, _, _ := im.At(x, y).RGBA()
+				if r > 0 {
+					mask.Set(x, y, color.Opaque)
+				}
+			}
+		}
+		fontMask = mask
+	}
 
 	// initialize glfw
 	if err := glfw.Init(); err != nil {
@@ -57,11 +109,9 @@ func Run(paths []string) {
 	gl.Enable(gl.TEXTURE_2D)
 
 	// run director
-	d := &Director{}
-	director.window = window
-	director.audio = audio
+	d := &Director{window: window, audio: audio}
+	d.menuView := &MenuView{director: d, paths: paths, texture: NewTexture()}
 
-	d.menuView = NewMenuView(d, paths)
 	if len(paths) == 1 {
 		d.PlayGame(paths[0])
 	} else {
@@ -86,17 +136,71 @@ func Run(paths []string) {
 				if joystickReset(glfw.Joystick1) || joystickReset(glfw.Joystick2) || readKey(window, glfw.KeyEscape) {
 					director.SetView(director.menuView)
 				}
-				updateControllers(window, console)
+				// update controllers
+				{
+					turbo := console.PPU.Frame%6 < 3
+					k1 := readKeys(window, turbo)
+					j1 := readJoystick(glfw.Joystick1, turbo)
+					j2 := readJoystick(glfw.Joystick2, turbo)
+					console.SetButtons1(combineButtons(k1, j1))
+					console.SetButtons2(j2)
+				}
 				console.StepSeconds(dt)
 				gl.BindTexture(gl.TEXTURE_2D, v.texture)
 				setTexture(console.Buffer())
-				drawBuffer(v.director.window)
+				// draw buffer
+				{
+					window := v.director.window
+					w, h := window.GetFramebufferSize()
+					s1 := float32(w) / 256
+					s2 := float32(h) / 240
+					f := float32(1 - padding)
+					var x, y float32
+					if s1 >= s2 {
+						x = f * s2 / s1
+						y = f
+					} else {
+						x = f
+						y = f * s1 / s2
+					}
+					gl.Begin(gl.QUADS)
+					gl.TexCoord2f(0, 1)
+					gl.Vertex2f(-x, -y)
+					gl.TexCoord2f(1, 1)
+					gl.Vertex2f(x, -y)
+					gl.TexCoord2f(1, 0)
+					gl.Vertex2f(x, y)
+					gl.TexCoord2f(0, 0)
+					gl.Vertex2f(-x, y)
+					gl.End()
+				}
+
 				gl.BindTexture(gl.TEXTURE_2D, 0)
 				if v.record {
 					v.frames = append(v.frames, copyImage(console.Buffer()))
 				}
 			case *MenuView:
-				v.checkButtons()
+				// check buttons
+				{
+					window := v.director.window
+					k1 := readKeys(window, false)
+					j1 := readJoystick(glfw.Joystick1, false)
+					j2 := readJoystick(glfw.Joystick2, false)
+					buttons := combineButtons(combineButtons(j1, j2), k1)
+					now := glfw.GetTime()
+					for i := range buttons {
+						if buttons[i] && !v.buttons[i] {
+							v.times[i] = now + initialDelay
+							v.onPress(i)
+						} else if !buttons[i] && v.buttons[i] {
+							v.onRelease(i)
+						} else if buttons[i] && now >= v.times[i] {
+							v.times[i] = now + repeatDelay
+							v.onPress(i)
+						}
+					}
+					v.buttons = buttons
+				}
 				// purge texture
 				for {
 					select {
@@ -122,7 +226,26 @@ func Run(paths []string) {
 				}
 				v.nx = nx
 				v.ny = ny
-				v.clampSelection()
+
+				// clamp selection
+				{
+					if v.i < 0 {
+						v.i = v.nx - 1
+					}
+					if v.i >= v.nx {
+						v.i = 0
+					}
+					if v.j < 0 {
+						v.j = 0
+						v.scroll--
+					}
+					if v.j >= v.ny {
+						v.j = v.ny - 1
+						v.scroll++
+					}
+					v.clampScroll(true)
+				}
+
 				gl.PushMatrix()
 				gl.Ortho(0, float64(w), float64(h), 0, -1, 1)
 				gl.BindTexture(gl.TEXTURE_2D, v.texture.texture)

@@ -12,24 +12,6 @@ import (
 
 var fontMask image.Image
 
-func init() {
-	im, err := png.Decode(bytes.NewBuffer(fontData))
-	if err != nil {
-		log.Fatalln(err)
-	}
-	size := im.Bounds().Size()
-	mask := image.NewRGBA(im.Bounds())
-	for y := 0; y < size.Y; y++ {
-		for x := 0; x < size.X; x++ {
-			r, _, _, _ := im.At(x, y).RGBA()
-			if r > 0 {
-				mask.Set(x, y, color.Opaque)
-			}
-		}
-	}
-	fontMask = mask
-}
-
 
 func DrawCenteredText(dst draw.Image, text string, dx, dy int, c color.Color) {
 	// split text into rows

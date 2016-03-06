@@ -30,34 +30,7 @@ type MenuView struct {
 	typeTime     float64
 }
 
-func NewMenuView(director *Director, paths []string) View {
-	view := MenuView{}
-	view.director = director
-	view.paths = paths
-	view.texture = NewTexture()
-	return &view
-}
 
-func (view *MenuView) checkButtons() {
-	window := view.director.window
-	k1 := readKeys(window, false)
-	j1 := readJoystick(glfw.Joystick1, false)
-	j2 := readJoystick(glfw.Joystick2, false)
-	buttons := combineButtons(combineButtons(j1, j2), k1)
-	now := glfw.GetTime()
-	for i := range buttons {
-		if buttons[i] && !view.buttons[i] {
-			view.times[i] = now + initialDelay
-			view.onPress(i)
-		} else if !buttons[i] && view.buttons[i] {
-			view.onRelease(i)
-		} else if buttons[i] && now >= view.times[i] {
-			view.times[i] = now + repeatDelay
-			view.onPress(i)
-		}
-	}
-	view.buttons = buttons
-}
 
 func (view *MenuView) onPress(index int) {
 	switch index {
@@ -100,36 +73,14 @@ func (view *MenuView) onChar(window *glfw.Window, char rune) {
 	for index, p := range view.paths {
 		_, p = path.Split(strings.ToLower(p))
 		if p >= view.typeBuffer {
-			view.highlight(index)
+			// highlight
+			view.scroll = index/view.nx - (view.ny-1)/2
+			view.clampScroll(false)
+			view.i = index % view.nx
+			view.j = (index-view.i)/view.nx - view.scroll
 			return
 		}
 	}
-}
-
-func (view *MenuView) highlight(index int) {
-	view.scroll = index/view.nx - (view.ny-1)/2
-	view.clampScroll(false)
-	view.i = index % view.nx
-	view.j = (index-view.i)/view.nx - view.scroll
-}
-
-
-func (view *MenuView) clampSelection() {
-	if view.i < 0 {
-		view.i = view.nx - 1
-	}
-	if view.i >= view.nx {
-		view.i = 0
-	}
-	if view.j < 0 {
-		view.j = 0
-		view.scroll--
-	}
-	if view.j >= view.ny {
-		view.j = view.ny - 1
-		view.scroll++
-	}
-	view.clampScroll(true)
 }
 
 func (view *MenuView) clampScroll(wrap bool) {

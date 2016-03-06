@@ -20,6 +20,18 @@ commit
 * inline NewDirector
 * inline Director.Step
 
+commit
+
+* inline font.go init() into Run()
+* inline NewGameView(), updateControllers()
+* inline NewMenuView()   (function was misleading because name implies general case, but there is only one specific case! so how general was it really?)
+
+* moved GameView and *GameView.onKey to run.go
+* deleted now empty gameview.go
+* inlined MenuView.clampSelection(), .highlight(), .checkButtons()
+
+commit
+
 
 
 
