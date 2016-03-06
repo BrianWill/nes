@@ -13,6 +13,16 @@ commit
 * in font.go, inline WordWrap(), DrawText(), and DrawCharacter(). (DrawText should have been called DrawTextSingleLine() or somesuch)
 * inline CreateGenericThumbnail
 
+commit
+
+* inline Texture.Bind, Texture.Unbind, Texture.Purge, Texture.Lookup. Texture.lru, Texture.loadThumbnail
+* inline Texture.coord (should have been coords() plural)
+* inline NewDirector
+* inline Director.Step
+
+
+
 
 * Something odd with Director containing both view and menuView? Why does GameView and MenuView need a Director?
 
+* confusingly, Texture has many methods and struct members that concern only the MenuView, not the GameView
