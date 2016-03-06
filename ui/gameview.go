@@ -3,8 +3,7 @@ package ui
 import (
 	"image"
 
-	"github.com/BrianWill
-/nes/nes"
+	"github.com/BrianWill/nes/nes"
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
 )
@@ -26,65 +25,6 @@ func NewGameView(director *Director, console *nes.Console, title, hash string) V
 	return &GameView{director, console, title, hash, texture, false, nil}
 }
 
-func (view *GameView) Enter() {
-	gl.ClearColor(0, 0, 0, 1)
-	view.director.SetTitle(view.title)
-	view.console.SetAudioChannel(view.director.audio.channel)
-	view.console.SetAudioSampleRate(view.director.audio.sampleRate)
-	view.director.window.SetKeyCallback(view.onKey)
-	// load state
-	if err := view.console.LoadState(savePath(view.hash)); err == nil {
-		return
-	} else {
-		view.console.Reset()
-	}
-	// load sram
-	cartridge := view.console.Cartridge
-	if cartridge.Battery != 0 {
-		if sram, err := readSRAM(sramPath(view.hash)); err == nil {
-			cartridge.SRAM = sram
-		}
-	}
-}
-
-func (view *GameView) Exit() {
-	view.director.window.SetKeyCallback(nil)
-	view.console.SetAudioChannel(nil)
-	view.console.SetAudioSampleRate(0)
-	// save sram
-	cartridge := view.console.Cartridge
-	if cartridge.Battery != 0 {
-		writeSRAM(sramPath(view.hash), cartridge.SRAM)
-	}
-	// save state
-	view.console.SaveState(savePath(view.hash))
-}
-
-func (view *GameView) Update(t, dt float64) {
-	if dt > 1 {
-		dt = 0
-	}
-	window := view.director.window
-	console := view.console
-	if joystickReset(glfw.Joystick1) {
-		view.director.ShowMenu()
-	}
-	if joystickReset(glfw.Joystick2) {
-		view.director.ShowMenu()
-	}
-	if readKey(window, glfw.KeyEscape) {
-		view.director.ShowMenu()
-	}
-	updateControllers(window, console)
-	console.StepSeconds(dt)
-	gl.BindTexture(gl.TEXTURE_2D, view.texture)
-	setTexture(console.Buffer())
-	drawBuffer(view.director.window)
-	gl.BindTexture(gl.TEXTURE_2D, 0)
-	if view.record {
-		view.frames = append(view.frames, copyImage(console.Buffer()))
-	}
-}
 
 func (view *GameView) onKey(window *glfw.Window,
 	key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {

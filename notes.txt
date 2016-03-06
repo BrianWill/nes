@@ -1,6 +1,4 @@
-1) Do we really need View interface? Only one call to enter and one call to exit. Only two View types.
+1) Do we really need View interface? Only one call to each method (Enter Update Exit) and only two View types (*GameView and *MenuView).
 
-
-
-2) fix blank screen bug after ESC then resume
+* Something odd with Director containing both view and menuView? Why does GameView and MenuView need a Director?
 

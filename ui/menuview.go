@@ -4,8 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/BrianWill
-/nes/nes"
+	"github.com/BrianWill/nes/nes"
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
 )
@@ -114,60 +113,6 @@ func (view *MenuView) highlight(index int) {
 	view.j = (index-view.i)/view.nx - view.scroll
 }
 
-func (view *MenuView) Enter() {
-	gl.ClearColor(0.333, 0.333, 0.333, 1)
-	view.director.SetTitle("Select Game")
-	view.director.window.SetCharCallback(view.onChar)
-}
-
-func (view *MenuView) Exit() {
-	view.director.window.SetCharCallback(nil)
-}
-
-func (view *MenuView) Update(t, dt float64) {
-	view.checkButtons()
-	view.texture.Purge()
-	window := view.director.window
-	w, h := window.GetFramebufferSize()
-	sx := 256 + margin*2
-	sy := 240 + margin*2
-	nx := (w - border*2) / sx
-	ny := (h - border*2) / sy
-	ox := (w-nx*sx)/2 + margin
-	oy := (h-ny*sy)/2 + margin
-	if nx < 1 {
-		nx = 1
-	}
-	if ny < 1 {
-		ny = 1
-	}
-	view.nx = nx
-	view.ny = ny
-	view.clampSelection()
-	gl.PushMatrix()
-	gl.Ortho(0, float64(w), float64(h), 0, -1, 1)
-	view.texture.Bind()
-	for j := 0; j < ny; j++ {
-		for i := 0; i < nx; i++ {
-			x := float32(ox + i*sx)
-			y := float32(oy + j*sy)
-			index := nx*(j+view.scroll) + i
-			if index >= len(view.paths) {
-				continue
-			}
-			path := view.paths[index]
-			tx, ty, tw, th := view.texture.Lookup(path)
-			drawThumbnail(x, y, tx, ty, tw, th)
-		}
-	}
-	view.texture.Unbind()
-	if int((t-view.t)*4)%2 == 0 {
-		x := float32(ox + view.i*sx)
-		y := float32(oy + view.j*sy)
-		drawSelection(x, y, 8, 4)
-	}
-	gl.PopMatrix()
-}
 
 func (view *MenuView) clampSelection() {
 	if view.i < 0 {
@@ -212,40 +157,4 @@ func (view *MenuView) clampScroll(wrap bool) {
 			view.j = view.ny - 1
 		}
 	}
-}
-
-func drawThumbnail(x, y, tx, ty, tw, th float32) {
-	sx := x + 4
-	sy := y + 4
-	gl.Disable(gl.TEXTURE_2D)
-	gl.Color3f(0.2, 0.2, 0.2)
-	gl.Begin(gl.QUADS)
-	gl.Vertex2f(sx, sy)
-	gl.Vertex2f(sx+256, sy)
-	gl.Vertex2f(sx+256, sy+240)
-	gl.Vertex2f(sx, sy+240)
-	gl.End()
-	gl.Enable(gl.TEXTURE_2D)
-	gl.Color3f(1, 1, 1)
-	gl.Begin(gl.QUADS)
-	gl.TexCoord2f(tx, ty)
-	gl.Vertex2f(x, y)
-	gl.TexCoord2f(tx+tw, ty)
-	gl.Vertex2f(x+256, y)
-	gl.TexCoord2f(tx+tw, ty+th)
-	gl.Vertex2f(x+256, y+240)
-	gl.TexCoord2f(tx, ty+th)
-	gl.Vertex2f(x, y+240)
-	gl.End()
-}
-
-func drawSelection(x, y, p, w float32) {
-	gl.LineWidth(w)
-	gl.Begin(gl.LINE_STRIP)
-	gl.Vertex2f(x-p, y-p)
-	gl.Vertex2f(x+256+p, y-p)
-	gl.Vertex2f(x+256+p, y+240+p)
-	gl.Vertex2f(x-p, y+240+p)
-	gl.Vertex2f(x-p, y-p)
-	gl.End()
 }
