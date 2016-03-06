@@ -1,0 +1,6 @@
+1) Do we really need View interface? Only one call to enter and one call to exit. Only two View types.
+
+
+
+2) fix blank screen bug after ESC then resume
+

@@ -15,7 +15,8 @@ import (
 	"os/user"
 	"path"
 
-	"github.com/fogleman/nes/nes"
+	"github.com/BrianWill
+/nes/nes"
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
 )
@@ -31,7 +32,8 @@ func init() {
 }
 
 func thumbnailURL(hash string) string {
-	return "http://www.michaelfogleman.com/static/nes/" + hash + ".png"
+	return "http://www.michaelBrianWill
+.com/static/nes/" + hash + ".png"
 }
 
 func thumbnailPath(hash string) string {
