@@ -30,9 +30,6 @@ func NewDirector(window *glfw.Window, audio *Audio) *Director {
 	return &director
 }
 
-func (d *Director) SetTitle(title string) {
-	d.window.SetTitle(title)
-}
 
 func (d *Director) SetView(view View) {
 	if d.view != nil {
@@ -60,7 +57,7 @@ func (d *Director) SetView(view View) {
 		switch v := d.view.(type) {
 		case *GameView:
 			gl.ClearColor(0, 0, 0, 1)
-			v.director.SetTitle(view.title)
+			d.window.SetTitle(view.title)
 			v.console.SetAudioChannel(v.director.audio.channel)
 			v.console.SetAudioSampleRate(v.director.audio.sampleRate)
 			v.director.window.SetKeyCallback(v.onKey)
@@ -79,7 +76,7 @@ func (d *Director) SetView(view View) {
 			}
 		case *MenuView:
 			gl.ClearColor(0.333, 0.333, 0.333, 1)
-			v.director.SetTitle("Select Game")
+			d.window.SetTitle("Select Game")
 			v.director.window.SetCharCallback(v.onChar)
 		}
 	}
@@ -100,14 +97,8 @@ func (d *Director) Step() {
 			}
 			window := v.director.window
 			console := v.console
-			if joystickReset(glfw.Joystick1) {
-				v.director.ShowMenu()
-			}
-			if joystickReset(glfw.Joystick2) {
-				v.director.ShowMenu()
-			}
-			if readKey(window, glfw.KeyEscape) {
-				v.director.ShowMenu()
+			if joystickReset(glfw.Joystick1) || joystickReset(glfw.Joystick2) || readKey(window, glfw.KeyEscape) {
+				director.SetView(director.menuView)
 			}
 			updateControllers(window, console)
 			console.StepSeconds(dt)
@@ -174,15 +165,14 @@ func (d *Director) Step() {
 					gl.Vertex2f(x+256, y+240)
 					gl.TexCoord2f(tx, ty+th)
 					gl.Vertex2f(x, y+240)
-					gl.End()				
+					gl.End()
 				}
 			}
 			v.texture.Unbind()
 			if int((timestamp - v.t)*4)%2 == 0 {
 				x := float32(ox + v.i*sx)
 				y := float32(oy + v.j*sy)
-				p := 8
-				w := 4
+				p, w := 8, 4
 
 				// draw selection highlight border
 				gl.LineWidth(w)
@@ -192,30 +182,11 @@ func (d *Director) Step() {
 				gl.Vertex2f(x+256+p, y+240+p)
 				gl.Vertex2f(x-p, y+240+p)
 				gl.Vertex2f(x-p, y-p)
-				gl.End()
+				gl.End()				
 			}
 			gl.PopMatrix()
 		}
 	}
-}
-
-func (d *Director) Start(paths []string) {
-	d.menuView = NewMenuView(d, paths)
-	if len(paths) == 1 {
-		d.PlayGame(paths[0])
-	} else {
-		d.ShowMenu()
-	}
-	d.Run()
-}
-
-func (d *Director) Run() {
-	for !d.window.ShouldClose() {
-		d.Step()
-		d.window.SwapBuffers()
-		glfw.PollEvents()
-	}
-	d.SetView(nil)
 }
 
 func (d *Director) PlayGame(path string) {
@@ -228,8 +199,4 @@ func (d *Director) PlayGame(path string) {
 		log.Fatalln(err)
 	}
 	d.SetView(NewGameView(d, console, path, hash))
-}
-
-func (d *Director) ShowMenu() {
-	d.SetView(d.menuView)
 }

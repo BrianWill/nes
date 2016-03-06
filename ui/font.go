@@ -30,61 +30,49 @@ func init() {
 	fontMask = mask
 }
 
-func CreateGenericThumbnail(text string) image.Image {
-	im := image.NewRGBA(image.Rect(0, 0, 256, 240))
-	draw.Draw(im, im.Rect, &image.Uniform{color.Black}, image.ZP, draw.Src)
-	DrawCenteredText(im, text, 1, 2, color.RGBA{128, 128, 128, 255})
-	DrawCenteredText(im, text, 0, 0, color.White)
-	return im
-}
-
-func WordWrap(text string, maxLength int) []string {
-	var rows []string
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return rows
-	}
-	row := words[0]
-	for _, word := range words[1:] {
-		newRow := row + " " + word
-		if len(newRow) <= maxLength {
-			row = newRow
-		} else {
-			rows = append(rows, row)
-			row = word
-		}
-	}
-	rows = append(rows, row)
-	return rows
-}
 
 func DrawCenteredText(dst draw.Image, text string, dx, dy int, c color.Color) {
-	rows := WordWrap(text, 15)
-	for i, row := range rows {
-		x := 128 - len(row)*8
+	// split text into rows
+	var rows []string
+	const rowMaxLength = 15
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		row := words[0]
+		for _, word := range words[1:] {
+			newRow := row + " " + word
+			if len(newRow) <= rowMaxLength {
+				row = newRow
+			} else {
+				rows = append(rows, row)
+				row = word
+			}
+		}
+		rows = append(rows, row)
+	}
+	// draw all rows
+	for i, rowText := range rows {
+		x := 128 - len(rowText)*8
 		y := 120 - len(rows)*12 + i*24
 		DrawText(dst, x+dx, y+dy, row, c)
+		x += dx
+		y += dy
+		// draw row
+		for i := range text {
+			// draw character
+			ch := rowText[i]
+			if !(ch < 32 || ch > 128) {
+				cx := int((ch-32)%16) * 16
+				cy := int((ch-32)/16) * 16
+				r := image.Rect(x, y, x+16, y+16)
+				src := &image.Uniform{c}
+				sp := image.Pt(cx, cy)
+				draw.DrawMask(dst, r, src, sp, fontMask, sp, draw.Over)	
+			}
+			x += 16  // next char pos
+		}
 	}
 }
 
-func DrawCharacter(dst draw.Image, x, y int, ch byte, c color.Color) {
-	if ch < 32 || ch > 128 {
-		return
-	}
-	cx := int((ch-32)%16) * 16
-	cy := int((ch-32)/16) * 16
-	r := image.Rect(x, y, x+16, y+16)
-	src := &image.Uniform{c}
-	sp := image.Pt(cx, cy)
-	draw.DrawMask(dst, r, src, sp, fontMask, sp, draw.Over)
-}
-
-func DrawText(dst draw.Image, x, y int, text string, c color.Color) {
-	for i := range text {
-		DrawCharacter(dst, x, y, text[i], c)
-		x += 16
-	}
-}
 
 var fontData = []byte{
 	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,

@@ -112,7 +112,13 @@ func (t *Texture) loadThumbnail(romPath string) image.Image {
 	name = strings.TrimSuffix(name, ".nes")
 	name = strings.Replace(name, "_", " ", -1)
 	name = strings.Title(name)
-	im := CreateGenericThumbnail(name)
+	
+	// create thumbnail
+	im := image.NewRGBA(image.Rect(0, 0, 256, 240))
+	draw.Draw(im, im.Rect, &image.Uniform{color.Black}, image.ZP, draw.Src)
+	DrawCenteredText(im, name, 1, 2, color.RGBA{128, 128, 128, 255})
+	DrawCenteredText(im, name, 0, 0, color.White)
+
 	hash, err := hashFile(romPath)
 	if err != nil {
 		return im

@@ -1,4 +1,18 @@
 1) Do we really need View interface? Only one call to each method (Enter Update Exit) and only two View types (*GameView and *MenuView).
 
+2) inlined drawThumbnail() and drawSelection() (which should have been named drawSelectionHighlightBorder())
+
+commit
+
+* inline director's Run method (what the fuck is the difference between Run() and Start()?)
+
+* inline ShowMenu() and SetTitle() of Director
+
+* in main.go, put getPaths inside main(). (Would have inlined its code, but this way we dont have to modify its logic.)
+
+* in font.go, inline WordWrap(), DrawText(), and DrawCharacter(). (DrawText should have been called DrawTextSingleLine() or somesuch)
+* inline CreateGenericThumbnail
+
+
 * Something odd with Director containing both view and menuView? Why does GameView and MenuView need a Director?
 

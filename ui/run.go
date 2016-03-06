@@ -57,6 +57,17 @@ func Run(paths []string) {
 	gl.Enable(gl.TEXTURE_2D)
 
 	// run director
-	director := NewDirector(window, audio)
-	director.Start(paths)
+	d := NewDirector(window, audio)
+	d.menuView = NewMenuView(d, paths)
+	if len(paths) == 1 {
+		d.PlayGame(paths[0])
+	} else {
+		d.SetView(d.menuView)
+	}
+	for !d.window.ShouldClose() {
+		d.Step()
+		d.window.SwapBuffers()
+		glfw.PollEvents()
+	}
+	d.SetView(nil)
 }
