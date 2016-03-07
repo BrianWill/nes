@@ -30,7 +30,9 @@ commit
 
 * inlined *Texture.downloadThumbnail()
 * changed *Texture.load() to loadTexture()
-* 
+* deleted empty  
+
+
 
 
 

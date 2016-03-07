@@ -185,7 +185,6 @@ func init() {
 }
 
 func Run(paths []string) {
-	fmt.Println("start run")
 	// initialize audio
 	portaudio.Initialize()
 	defer portaudio.Terminate()
