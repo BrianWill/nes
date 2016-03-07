@@ -1,8 +1,7 @@
 package nes
 
-import "encoding/gob"
-
 const frameCounterRate = CPUFrequency / 240.0
+const sampleRate = CPUFrequency / 44100.0 / 2
 
 var lengthTable = []byte{
 	10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
@@ -46,7 +45,6 @@ func init() {
 type APU struct {
 	console     *Console
 	channel     chan float32
-	sampleRate  float64
 	pulse1      Pulse
 	pulse2      Pulse
 	triangle    Triangle
@@ -56,7 +54,6 @@ type APU struct {
 	framePeriod byte
 	frameValue  byte
 	frameIRQ    bool
-	filterChain FilterChain
 }
 
 func NewAPU(console *Console) *APU {
@@ -69,32 +66,6 @@ func NewAPU(console *Console) *APU {
 	return &apu
 }
 
-func (apu *APU) Save(encoder *gob.Encoder) error {
-	encoder.Encode(apu.cycle)
-	encoder.Encode(apu.framePeriod)
-	encoder.Encode(apu.frameValue)
-	encoder.Encode(apu.frameIRQ)
-	apu.pulse1.Save(encoder)
-	apu.pulse2.Save(encoder)
-	apu.triangle.Save(encoder)
-	apu.noise.Save(encoder)
-	apu.dmc.Save(encoder)
-	return nil
-}
-
-func (apu *APU) Load(decoder *gob.Decoder) error {
-	decoder.Decode(&apu.cycle)
-	decoder.Decode(&apu.framePeriod)
-	decoder.Decode(&apu.frameValue)
-	decoder.Decode(&apu.frameIRQ)
-	apu.pulse1.Load(decoder)
-	apu.pulse2.Load(decoder)
-	apu.triangle.Load(decoder)
-	apu.noise.Load(decoder)
-	apu.dmc.Load(decoder)
-	return nil
-}
-
 func (apu *APU) Step() {
 	cycle1 := apu.cycle
 	apu.cycle++
@@ -105,17 +76,16 @@ func (apu *APU) Step() {
 	if f1 != f2 {
 		apu.stepFrameCounter()
 	}
-	s1 := int(float64(cycle1) / apu.sampleRate)
-	s2 := int(float64(cycle2) / apu.sampleRate)
+	s1 := int(float64(cycle1) / sampleRate)
+	s2 := int(float64(cycle2) / sampleRate)
 	if s1 != s2 {
 		apu.sendSample()
 	}
 }
 
 func (apu *APU) sendSample() {
-	output := apu.filterChain.Step(apu.output())
 	select {
-	case apu.channel <- output:
+	case apu.channel <- apu.output():
 	default:
 	}
 }
@@ -344,56 +314,6 @@ type Pulse struct {
 	constantVolume  byte
 }
 
-func (p *Pulse) Save(encoder *gob.Encoder) error {
-	encoder.Encode(p.enabled)
-	encoder.Encode(p.channel)
-	encoder.Encode(p.lengthEnabled)
-	encoder.Encode(p.lengthValue)
-	encoder.Encode(p.timerPeriod)
-	encoder.Encode(p.timerValue)
-	encoder.Encode(p.dutyMode)
-	encoder.Encode(p.dutyValue)
-	encoder.Encode(p.sweepReload)
-	encoder.Encode(p.sweepEnabled)
-	encoder.Encode(p.sweepNegate)
-	encoder.Encode(p.sweepShift)
-	encoder.Encode(p.sweepPeriod)
-	encoder.Encode(p.sweepValue)
-	encoder.Encode(p.envelopeEnabled)
-	encoder.Encode(p.envelopeLoop)
-	encoder.Encode(p.envelopeStart)
-	encoder.Encode(p.envelopePeriod)
-	encoder.Encode(p.envelopeValue)
-	encoder.Encode(p.envelopeVolume)
-	encoder.Encode(p.constantVolume)
-	return nil
-}
-
-func (p *Pulse) Load(decoder *gob.Decoder) error {
-	decoder.Decode(&p.enabled)
-	decoder.Decode(&p.channel)
-	decoder.Decode(&p.lengthEnabled)
-	decoder.Decode(&p.lengthValue)
-	decoder.Decode(&p.timerPeriod)
-	decoder.Decode(&p.timerValue)
-	decoder.Decode(&p.dutyMode)
-	decoder.Decode(&p.dutyValue)
-	decoder.Decode(&p.sweepReload)
-	decoder.Decode(&p.sweepEnabled)
-	decoder.Decode(&p.sweepNegate)
-	decoder.Decode(&p.sweepShift)
-	decoder.Decode(&p.sweepPeriod)
-	decoder.Decode(&p.sweepValue)
-	decoder.Decode(&p.envelopeEnabled)
-	decoder.Decode(&p.envelopeLoop)
-	decoder.Decode(&p.envelopeStart)
-	decoder.Decode(&p.envelopePeriod)
-	decoder.Decode(&p.envelopeValue)
-	decoder.Decode(&p.envelopeVolume)
-	decoder.Decode(&p.constantVolume)
-	return nil
-}
-
 func (p *Pulse) writeControl(value byte) {
 	p.dutyMode = (value >> 6) & 3
 	p.lengthEnabled = (value>>5)&1 == 0
@@ -521,32 +441,6 @@ type Triangle struct {
 	counterReload bool
 }
 
-func (t *Triangle) Save(encoder *gob.Encoder) error {
-	encoder.Encode(t.enabled)
-	encoder.Encode(t.lengthEnabled)
-	encoder.Encode(t.lengthValue)
-	encoder.Encode(t.timerPeriod)
-	encoder.Encode(t.timerValue)
-	encoder.Encode(t.dutyValue)
-	encoder.Encode(t.counterPeriod)
-	encoder.Encode(t.counterValue)
-	encoder.Encode(t.counterReload)
-	return nil
-}
-
-func (t *Triangle) Load(decoder *gob.Decoder) error {
-	decoder.Decode(&t.enabled)
-	decoder.Decode(&t.lengthEnabled)
-	decoder.Decode(&t.lengthValue)
-	decoder.Decode(&t.timerPeriod)
-	decoder.Decode(&t.timerValue)
-	decoder.Decode(&t.dutyValue)
-	decoder.Decode(&t.counterPeriod)
-	decoder.Decode(&t.counterValue)
-	decoder.Decode(&t.counterReload)
-	return nil
-}
-
 func (t *Triangle) writeControl(value byte) {
 	t.lengthEnabled = (value>>7)&1 == 0
 	t.counterPeriod = value & 0x7F
@@ -621,42 +515,6 @@ type Noise struct {
 	envelopeValue   byte
 	envelopeVolume  byte
 	constantVolume  byte
-}
-
-func (n *Noise) Save(encoder *gob.Encoder) error {
-	encoder.Encode(n.enabled)
-	encoder.Encode(n.mode)
-	encoder.Encode(n.shiftRegister)
-	encoder.Encode(n.lengthEnabled)
-	encoder.Encode(n.lengthValue)
-	encoder.Encode(n.timerPeriod)
-	encoder.Encode(n.timerValue)
-	encoder.Encode(n.envelopeEnabled)
-	encoder.Encode(n.envelopeLoop)
-	encoder.Encode(n.envelopeStart)
-	encoder.Encode(n.envelopePeriod)
-	encoder.Encode(n.envelopeValue)
-	encoder.Encode(n.envelopeVolume)
-	encoder.Encode(n.constantVolume)
-	return nil
-}
-
-func (n *Noise) Load(decoder *gob.Decoder) error {
-	decoder.Decode(&n.enabled)
-	decoder.Decode(&n.mode)
-	decoder.Decode(&n.shiftRegister)
-	decoder.Decode(&n.lengthEnabled)
-	decoder.Decode(&n.lengthValue)
-	decoder.Decode(&n.timerPeriod)
-	decoder.Decode(&n.timerValue)
-	decoder.Decode(&n.envelopeEnabled)
-	decoder.Decode(&n.envelopeLoop)
-	decoder.Decode(&n.envelopeStart)
-	decoder.Decode(&n.envelopePeriod)
-	decoder.Decode(&n.envelopeValue)
-	decoder.Decode(&n.envelopeVolume)
-	decoder.Decode(&n.constantVolume)
-	return nil
 }
 
 func (n *Noise) writeControl(value byte) {
@@ -752,38 +610,6 @@ type DMC struct {
 	tickValue      byte
 	loop           bool
 	irq            bool
-}
-
-func (d *DMC) Save(encoder *gob.Encoder) error {
-	encoder.Encode(d.enabled)
-	encoder.Encode(d.value)
-	encoder.Encode(d.sampleAddress)
-	encoder.Encode(d.sampleLength)
-	encoder.Encode(d.currentAddress)
-	encoder.Encode(d.currentLength)
-	encoder.Encode(d.shiftRegister)
-	encoder.Encode(d.bitCount)
-	encoder.Encode(d.tickPeriod)
-	encoder.Encode(d.tickValue)
-	encoder.Encode(d.loop)
-	encoder.Encode(d.irq)
-	return nil
-}
-
-func (d *DMC) Load(decoder *gob.Decoder) error {
-	decoder.Decode(&d.enabled)
-	decoder.Decode(&d.value)
-	decoder.Decode(&d.sampleAddress)
-	decoder.Decode(&d.sampleLength)
-	decoder.Decode(&d.currentAddress)
-	decoder.Decode(&d.currentLength)
-	decoder.Decode(&d.shiftRegister)
-	decoder.Decode(&d.bitCount)
-	decoder.Decode(&d.tickPeriod)
-	decoder.Decode(&d.tickValue)
-	decoder.Decode(&d.loop)
-	decoder.Decode(&d.irq)
-	return nil
 }
 
 func (d *DMC) writeControl(value byte) {

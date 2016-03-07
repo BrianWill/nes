@@ -1,16 +1,11 @@
 package nes
 
-import (
-	"encoding/gob"
-	"fmt"
-)
+import "fmt"
 
 type Mapper interface {
 	Read(address uint16) byte
 	Write(address uint16, value byte)
 	Step()
-	Save(encoder *gob.Encoder) error
-	Load(decoder *gob.Decoder) error
 }
 
 func NewMapper(console *Console) (Mapper, error) {

@@ -42,10 +42,6 @@ func sramPath(hash string) string {
 	return homeDir + "/.nes/sram/" + hash + ".dat"
 }
 
-func savePath(hash string) string {
-	return homeDir + "/.nes/save/" + hash + ".dat"
-}
-
 func readKey(window *glfw.Window, key glfw.Key) bool {
 	return window.GetKey(key) == glfw.Press
 }
@@ -54,7 +50,7 @@ func readKeys(window *glfw.Window, turbo bool) [8]bool {
 	var result [8]bool
 	result[nes.ButtonA] = readKey(window, glfw.KeyZ) || (turbo && readKey(window, glfw.KeyA))
 	result[nes.ButtonB] = readKey(window, glfw.KeyX) || (turbo && readKey(window, glfw.KeyS))
-	result[nes.ButtonSelect] = readKey(window, glfw.KeyRightShift)
+	result[nes.ButtonSelect] = readKey(window, glfw.KeyRightShift) || readKey(window, glfw.KeyLeftShift)
 	result[nes.ButtonStart] = readKey(window, glfw.KeyEnter)
 	result[nes.ButtonUp] = readKey(window, glfw.KeyUp)
 	result[nes.ButtonDown] = readKey(window, glfw.KeyDown)

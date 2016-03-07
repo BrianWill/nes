@@ -1,9 +1,6 @@
 package nes
 
-import (
-	"encoding/gob"
-	"log"
-)
+import "log"
 
 type Mapper4 struct {
 	*Cartridge
@@ -26,32 +23,6 @@ func NewMapper4(console *Console, cartridge *Cartridge) Mapper {
 	m.prgOffsets[2] = m.prgBankOffset(-2)
 	m.prgOffsets[3] = m.prgBankOffset(-1)
 	return &m
-}
-
-func (m *Mapper4) Save(encoder *gob.Encoder) error {
-	encoder.Encode(m.register)
-	encoder.Encode(m.registers)
-	encoder.Encode(m.prgMode)
-	encoder.Encode(m.chrMode)
-	encoder.Encode(m.prgOffsets)
-	encoder.Encode(m.chrOffsets)
-	encoder.Encode(m.reload)
-	encoder.Encode(m.counter)
-	encoder.Encode(m.irqEnable)
-	return nil
-}
-
-func (m *Mapper4) Load(decoder *gob.Decoder) error {
-	decoder.Decode(&m.register)
-	decoder.Decode(&m.registers)
-	decoder.Decode(&m.prgMode)
-	decoder.Decode(&m.chrMode)
-	decoder.Decode(&m.prgOffsets)
-	decoder.Decode(&m.chrOffsets)
-	decoder.Decode(&m.reload)
-	decoder.Decode(&m.counter)
-	decoder.Decode(&m.irqEnable)
-	return nil
 }
 
 func (m *Mapper4) Step() {

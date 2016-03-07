@@ -9,6 +9,7 @@ commit
 * in main.go, put getPaths inside main(). (Would have inlined its code, but this way we dont have to modify its logic.)
 * in font.go, inline WordWrap(), DrawText(), and DrawCharacter(). (DrawText should have been called DrawTextSingleLine() or somesuch)
 * inline CreateGenericThumbnail
+* inlined *Texture.downloadThumbnail()
 
 commit
 
@@ -20,17 +21,24 @@ commit
 commit
 
 * inline font.go init() into Run()
-* inline NewGameView(), updateControllers()
+* moved rest of font.go into director.go and deleted font.go
+* inline NewGameView(), updateControllers(), drawBuffer()
 * inline NewMenuView()   (function was misleading because name implies general case, but there is only one specific case! so how general was it really?)
-* moved GameView and *GameView.onKey to run.go
+* moved GameView and *GameView.onKey to director.go
+* inline as anon func *GameView.onKey and *MenuView.onChar
 * deleted now empty gameview.go
 * inlined MenuView.clampSelection(), .highlight(), .checkButtons()
+* inlined NewTexture()
+* removed empty font.go
 
 commit
 
-* inlined *Texture.downloadThumbnail()
-* changed *Texture.load() to loadTexture()
-* deleted empty  
+* changed *Texture.load() to loadTexture()  (loadTexture is long and ugly enough that I didn't inline it even though it's only called in once place)
+* made DrawCenteredText a private function inside loadTexture
+* changed *Director.playGame() to playGame() and *Director.setView() to setView()
+* made onPress a private func right before its two calls
+* inlined NewAudio
+* 
 
 
 
