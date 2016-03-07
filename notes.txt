@@ -1,25 +1,16 @@
 * inline View.Enter, .Update, .Exit and remove from them View interface 
 (Do we really need View interface? Only one call to each method (Enter Update Exit) and only two View types (*GameView and *MenuView).)
 * inlined drawThumbnail() and drawSelection() (which should have been named drawSelectionHighlightBorder())
-
-commit
-
 * inline director's Run method (what the fuck is the difference between Run() and Start()?)
 * inline ShowMenu() and SetTitle() of Director
 * in main.go, put getPaths inside main(). (Would have inlined its code, but this way we dont have to modify its logic.)
 * in font.go, inline WordWrap(), DrawText(), and DrawCharacter(). (DrawText should have been called DrawTextSingleLine() or somesuch)
 * inline CreateGenericThumbnail
 * inlined *Texture.downloadThumbnail()
-
-commit
-
 * inline Texture.Bind, Texture.Unbind, Texture.Purge, Texture.Lookup. Texture.lru, Texture.loadThumbnail
 * inline Texture.coord (should have been coords() plural)
 * inline NewDirector
 * inline Director.Step
-
-commit
-
 * inline font.go init() into Run()
 * moved rest of font.go into director.go and deleted font.go
 * inline NewGameView(), updateControllers(), drawBuffer()
@@ -30,18 +21,20 @@ commit
 * inlined MenuView.clampSelection(), .highlight(), .checkButtons()
 * inlined NewTexture()
 * removed empty font.go
-
-commit
-
 * changed *Texture.load() to loadTexture()  (loadTexture is long and ugly enough that I didn't inline it even though it's only called in once place)
 * made DrawCenteredText a private function inside loadTexture
 * changed *Director.playGame() to playGame() and *Director.setView() to setView()
 * made onPress a private func right before its two calls
-* inlined NewAudio
-* 
+* inlined NewAudio and methods of *Audio
 
+commit
 
+* moved playGame(), clampScroll(), and loadTexture() into Run()
+    (perhaps a subfunc top-level keyword in which you specify the name of the one functions in which this function is used)
+    (maybe allow us to specify multiply functions, but that kind of defeats the purpose: as soon as a function is called in two other top-level functions, it's not mentally confineable the same way)
+    unfortunate that in requires us to put the subfunction declarations ahead of their use in other subfunctions (requiring predeclaration in cases of mutual recursion (and self-recursion?))
 
+* removed .director from both GameView and MenuView
 
 
 

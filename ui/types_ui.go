@@ -37,7 +37,6 @@ type Texture struct {
 }
 
 type GameView struct {
-	director *Director
 	console *nes.Console
 	title string
 	hash string
@@ -47,7 +46,6 @@ type GameView struct {
 }
 
 type MenuView struct {
-	director *Director
 	paths []string
 	texture *Texture
 	nx, ny, i, j int
