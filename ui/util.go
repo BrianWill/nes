@@ -31,8 +31,7 @@ func init() {
 }
 
 func thumbnailURL(hash string) string {
-	return "http://www.michaelBrianWill
-.com/static/nes/" + hash + ".png"
+	return "http://www.michaelfogleman.com/static/nes/" + hash + ".png"
 }
 
 func thumbnailPath(hash string) string {

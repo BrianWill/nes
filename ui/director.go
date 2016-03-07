@@ -50,7 +50,7 @@ func (d *Director) SetView(view View) {
 		switch v := d.view.(type) {
 		case *GameView:
 			gl.ClearColor(0, 0, 0, 1)
-			d.window.SetTitle(view.title)
+			d.window.SetTitle(v.title)
 			v.console.SetAudioChannel(v.director.audio.channel)
 			v.console.SetAudioSampleRate(v.director.audio.sampleRate)
 			v.director.window.SetKeyCallback(v.onKey)
