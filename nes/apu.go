@@ -1,70 +1,7 @@
 package nes
 
-const frameCounterRate = CPUFrequency / 240.0
-const sampleRate = CPUFrequency / 44100.0 / 2
 
-var lengthTable = []byte{
-	10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14,
-	12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
-}
 
-var dutyTable = [][]byte{
-	{0, 1, 0, 0, 0, 0, 0, 0},
-	{0, 1, 1, 0, 0, 0, 0, 0},
-	{0, 1, 1, 1, 1, 0, 0, 0},
-	{1, 0, 0, 1, 1, 1, 1, 1},
-}
-
-var triangleTable = []byte{
-	15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
-	0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-}
-
-var noiseTable = []uint16{
-	4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068,
-}
-
-var dmcTable = []byte{
-	214, 190, 170, 160, 143, 127, 113, 107, 95, 80, 71, 64, 53, 42, 36, 27,
-}
-
-var pulseTable [31]float32
-var tndTable [203]float32
-
-func init() {
-	for i := 0; i < 31; i++ {
-		pulseTable[i] = 95.52 / (8128.0/float32(i) + 100)
-	}
-	for i := 0; i < 203; i++ {
-		tndTable[i] = 163.67 / (24329.0/float32(i) + 100)
-	}
-}
-
-// APU
-
-type APU struct {
-	console     *Console
-	channel     chan float32
-	pulse1      Pulse
-	pulse2      Pulse
-	triangle    Triangle
-	noise       Noise
-	dmc         DMC
-	cycle       uint64
-	framePeriod byte
-	frameValue  byte
-	frameIRQ    bool
-}
-
-func NewAPU(console *Console) *APU {
-	apu := APU{}
-	apu.console = console
-	apu.noise.shiftRegister = 1
-	apu.pulse1.channel = 1
-	apu.pulse2.channel = 2
-	apu.dmc.cpu = console.CPU
-	return &apu
-}
 
 func (apu *APU) Step() {
 	cycle1 := apu.cycle
@@ -290,29 +227,7 @@ func (apu *APU) writeFrameCounter(value byte) {
 
 // Pulse
 
-type Pulse struct {
-	enabled         bool
-	channel         byte
-	lengthEnabled   bool
-	lengthValue     byte
-	timerPeriod     uint16
-	timerValue      uint16
-	dutyMode        byte
-	dutyValue       byte
-	sweepReload     bool
-	sweepEnabled    bool
-	sweepNegate     bool
-	sweepShift      byte
-	sweepPeriod     byte
-	sweepValue      byte
-	envelopeEnabled bool
-	envelopeLoop    bool
-	envelopeStart   bool
-	envelopePeriod  byte
-	envelopeValue   byte
-	envelopeVolume  byte
-	constantVolume  byte
-}
+
 
 func (p *Pulse) writeControl(value byte) {
 	p.dutyMode = (value >> 6) & 3
@@ -429,17 +344,7 @@ func (p *Pulse) output() byte {
 
 // Triangle
 
-type Triangle struct {
-	enabled       bool
-	lengthEnabled bool
-	lengthValue   byte
-	timerPeriod   uint16
-	timerValue    uint16
-	dutyValue     byte
-	counterPeriod byte
-	counterValue  byte
-	counterReload bool
-}
+
 
 func (t *Triangle) writeControl(value byte) {
 	t.lengthEnabled = (value>>7)&1 == 0
@@ -498,24 +403,6 @@ func (t *Triangle) output() byte {
 	return triangleTable[t.dutyValue]
 }
 
-// Noise
-
-type Noise struct {
-	enabled         bool
-	mode            bool
-	shiftRegister   uint16
-	lengthEnabled   bool
-	lengthValue     byte
-	timerPeriod     uint16
-	timerValue      uint16
-	envelopeEnabled bool
-	envelopeLoop    bool
-	envelopeStart   bool
-	envelopePeriod  byte
-	envelopeValue   byte
-	envelopeVolume  byte
-	constantVolume  byte
-}
 
 func (n *Noise) writeControl(value byte) {
 	n.lengthEnabled = (value>>5)&1 == 0

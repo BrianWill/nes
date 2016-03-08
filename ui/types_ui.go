@@ -2,6 +2,10 @@ package ui
 
 import (
 	"image"
+	"runtime"
+	"log"
+	"os/user"
+	
 	"github.com/BrianWill/nes/nes"
 	"github.com/go-gl/glfw/v3.1/glfw"
 	"github.com/gordonklaus/portaudio"
@@ -72,9 +76,6 @@ const (
 	scale  = 3
 	title  = "NES"
 )
-
-var fontMask image.Image
-
 
 var fontData = []byte{
 	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
@@ -147,5 +148,23 @@ var fontData = []byte{
 	0xF0, 0xEB, 0x7B, 0x83, 0x53, 0xC0, 0x1F, 0xEF, 0x0D, 0xA2, 0x4D, 0x77,
 	0x69, 0xB8, 0xB7, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
 	0x42, 0x60, 0x82,
+}
+
+
+var homeDir string
+
+func init() {
+	// we need a parallel OS thread to avoid audio stuttering
+	runtime.GOMAXPROCS(2)
+
+	// we need to keep OpenGL calls on a single thread
+	runtime.LockOSThread()
+
+	// init homeDir
+	u, err := user.Current()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	homeDir = u.HomeDir
 }
 

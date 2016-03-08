@@ -10,9 +10,7 @@ import (
 	"image/gif"
 	"image/png"
 	"io/ioutil"
-	"log"
 	"os"
-	"os/user"
 	"path"
 
 	"github.com/BrianWill/nes/nes"
@@ -20,15 +18,6 @@ import (
 	"github.com/go-gl/glfw/v3.1/glfw"
 )
 
-var homeDir string
-
-func init() {
-	u, err := user.Current()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	homeDir = u.HomeDir
-}
 
 func thumbnailURL(hash string) string {
 	return "http://www.michaelfogleman.com/static/nes/" + hash + ".png"

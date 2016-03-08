@@ -33,11 +33,22 @@ commit
     (perhaps a subfunc top-level keyword in which you specify the name of the one functions in which this function is used)
     (maybe allow us to specify multiply functions, but that kind of defeats the purpose: as soon as a function is called in two other top-level functions, it's not mentally confineable the same way)
     unfortunate that in requires us to put the subfunction declarations ahead of their use in other subfunctions (requiring predeclaration in cases of mutual recursion (and self-recursion?))
+    (perhaps just have subfuncs go at end of the function body rather than top, or maybe allow them to be anywhere but constrained to scope, but can be used in scope before their declaration)
 
 * removed .director from both GameView and MenuView
 
 
-
-* Something odd with Director containing both view and menuView? Why does GameView and MenuView need a Director?
-
+* Something odd with Director containing both view and menuView? can we remove menuView?
 * confusingly, Texture has many methods and struct members that concern only the MenuView, not the GameView
+
+
+
+package nes
+
+* move all types to nes_types.go
+* inline NewCartridge, NewController, 
+
+
+
+
+* use blocks allow for more early-return style logic which tends to be flatter (less nesting)

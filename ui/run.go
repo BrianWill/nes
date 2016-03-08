@@ -2,7 +2,6 @@ package ui
 
 import (
 	"log"
-	"runtime"
 	"image"
 	"image/color"
 	"image/png"
@@ -20,15 +19,9 @@ import (
 	"github.com/gordonklaus/portaudio"
 )
 
-func init() {
-	// we need a parallel OS thread to avoid audio stuttering
-	runtime.GOMAXPROCS(2)
-
-	// we need to keep OpenGL calls on a single thread
-	runtime.LockOSThread()
-}
-
 func Run(paths []string) {
+	var fontMask image.Image
+
 	clampScroll := func (v *MenuView, wrap bool) {
 		n := len(v.paths)
 		rows := n / v.nx
@@ -57,6 +50,7 @@ func Run(paths []string) {
 	}
 
 	setView := func (d *Director, view View) {
+		// clean up previously used view
 		if d.view != nil {
 			switch v:= d.view.(type) {
 			case *GameView:
@@ -72,6 +66,7 @@ func Run(paths []string) {
 			}
 		}
 		d.view = view
+		// set up new view
 		if d.view != nil {
 			switch v := d.view.(type) {
 			case *GameView:
@@ -159,7 +154,6 @@ func Run(paths []string) {
 				x := 128 - len(row)*8 + dx
 				y := 120 - len(rows)*12 + i*24 + dy
 				// draw individual row
-				//DrawText(dst, x+dx, y+dy, row, c)
 				for _, ch := range row {
 					// draw character
 					if !(ch < 32 || ch > 128) {

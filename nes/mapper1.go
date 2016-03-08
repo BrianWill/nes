@@ -1,64 +1,6 @@
 package nes
 
-import "log"
 
-type Mapper1 struct {
-	*Cartridge
-	shiftRegister byte
-	control       byte
-	prgMode       byte
-	chrMode       byte
-	prgBank       byte
-	chrBank0      byte
-	chrBank1      byte
-	prgOffsets    [2]int
-	chrOffsets    [2]int
-}
-
-func NewMapper1(cartridge *Cartridge) Mapper {
-	m := Mapper1{}
-	m.Cartridge = cartridge
-	m.shiftRegister = 0x10
-	m.prgOffsets[1] = m.prgBankOffset(-1)
-	return &m
-}
-
-func (m *Mapper1) Step() {
-}
-
-func (m *Mapper1) Read(address uint16) byte {
-	switch {
-	case address < 0x2000:
-		bank := address / 0x1000
-		offset := address % 0x1000
-		return m.CHR[m.chrOffsets[bank]+int(offset)]
-	case address >= 0x8000:
-		address = address - 0x8000
-		bank := address / 0x4000
-		offset := address % 0x4000
-		return m.PRG[m.prgOffsets[bank]+int(offset)]
-	case address >= 0x6000:
-		return m.SRAM[int(address)-0x6000]
-	default:
-		log.Fatalf("unhandled mapper1 read at address: 0x%04X", address)
-	}
-	return 0
-}
-
-func (m *Mapper1) Write(address uint16, value byte) {
-	switch {
-	case address < 0x2000:
-		bank := address / 0x1000
-		offset := address % 0x1000
-		m.CHR[m.chrOffsets[bank]+int(offset)] = value
-	case address >= 0x8000:
-		m.loadRegister(address, value)
-	case address >= 0x6000:
-		m.SRAM[int(address)-0x6000] = value
-	default:
-		log.Fatalf("unhandled mapper1 write at address: 0x%04X", address)
-	}
-}
 
 func (m *Mapper1) loadRegister(address uint16, value byte) {
 	if value&0x80 == 0x80 {

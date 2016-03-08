@@ -1,97 +1,5 @@
 package nes
 
-import "image"
-
-type PPU struct {
-	Memory           // memory interface
-	console *Console // reference to parent object
-
-	Cycle    int    // 0-340
-	ScanLine int    // 0-261, 0-239=visible, 240=post, 241-260=vblank, 261=pre
-	Frame    uint64 // frame counter
-
-	// storage variables
-	paletteData   [32]byte
-	nameTableData [2048]byte
-	oamData       [256]byte
-	front         *image.RGBA
-	back          *image.RGBA
-
-	// PPU registers
-	v uint16 // current vram address (15 bit)
-	t uint16 // temporary vram address (15 bit)
-	x byte   // fine x scroll (3 bit)
-	w byte   // write toggle (1 bit)
-	f byte   // even/odd frame flag (1 bit)
-
-	register byte
-
-	// NMI flags
-	nmiOccurred bool
-	nmiOutput   bool
-	nmiPrevious bool
-	nmiDelay    byte
-
-	// background temporary variables
-	nameTableByte      byte
-	attributeTableByte byte
-	lowTileByte        byte
-	highTileByte       byte
-	tileData           uint64
-
-	// sprite temporary variables
-	spriteCount      int
-	spritePatterns   [8]uint32
-	spritePositions  [8]byte
-	spritePriorities [8]byte
-	spriteIndexes    [8]byte
-
-	// $2000 PPUCTRL
-	flagNameTable       byte // 0: $2000; 1: $2400; 2: $2800; 3: $2C00
-	flagIncrement       byte // 0: add 1; 1: add 32
-	flagSpriteTable     byte // 0: $0000; 1: $1000; ignored in 8x16 mode
-	flagBackgroundTable byte // 0: $0000; 1: $1000
-	flagSpriteSize      byte // 0: 8x8; 1: 8x16
-	flagMasterSlave     byte // 0: read EXT; 1: write EXT
-
-	// $2001 PPUMASK
-	flagGrayscale          byte // 0: color; 1: grayscale
-	flagShowLeftBackground byte // 0: hide; 1: show
-	flagShowLeftSprites    byte // 0: hide; 1: show
-	flagShowBackground     byte // 0: hide; 1: show
-	flagShowSprites        byte // 0: hide; 1: show
-	flagRedTint            byte // 0: normal; 1: emphasized
-	flagGreenTint          byte // 0: normal; 1: emphasized
-	flagBlueTint           byte // 0: normal; 1: emphasized
-
-	// $2002 PPUSTATUS
-	flagSpriteZeroHit  byte
-	flagSpriteOverflow byte
-
-	// $2003 OAMADDR
-	oamAddress byte
-
-	// $2007 PPUDATA
-	bufferedData byte // for buffered reads
-}
-
-func NewPPU(console *Console) *PPU {
-	ppu := PPU{Memory: NewPPUMemory(console), console: console}
-	ppu.front = image.NewRGBA(image.Rect(0, 0, 256, 240))
-	ppu.back = image.NewRGBA(image.Rect(0, 0, 256, 240))
-	ppu.Reset()
-	return &ppu
-}
-
-func (ppu *PPU) Reset() {
-	ppu.Cycle = 340
-	ppu.ScanLine = 240
-	ppu.Frame = 0
-	ppu.writeControl(0)
-	ppu.writeMask(0)
-	ppu.writeOAMAddress(0)
-}
-
 func (ppu *PPU) readPalette(address uint16) byte {
 	if address >= 16 && address%4 == 0 {
 		address -= 16
@@ -544,7 +452,7 @@ func (ppu *PPU) tick() {
 	if ppu.nmiDelay > 0 {
 		ppu.nmiDelay--
 		if ppu.nmiDelay == 0 && ppu.nmiOutput && ppu.nmiOccurred {
-			ppu.console.CPU.triggerNMI()
+			ppu.console.CPU.interrupt = interruptNMI  // non-maskable interrupt on next cycle
 		}
 	}
 
