@@ -78,7 +78,7 @@ func (apu *APU) stepTimer() {
 		apu.pulse1.stepTimer()
 		apu.pulse2.stepTimer()
 		apu.noise.stepTimer()
-		apu.dmc.stepTimer()
+		apu.dmc.stepTimer(apu.console)
 	}
 	apu.triangle.stepTimer()
 }
@@ -104,7 +104,7 @@ func (apu *APU) stepLength() {
 
 func (apu *APU) fireIRQ() {
 	if apu.frameIRQ {
-		apu.console.CPU.triggerIRQ()
+		triggerIRQ(apu.console.CPU)
 	}
 }
 
@@ -483,22 +483,6 @@ func (n *Noise) output() byte {
 
 // DMC
 
-type DMC struct {
-	cpu            *CPU
-	enabled        bool
-	value          byte
-	sampleAddress  uint16
-	sampleLength   uint16
-	currentAddress uint16
-	currentLength  uint16
-	shiftRegister  byte
-	bitCount       byte
-	tickPeriod     byte
-	tickValue      byte
-	loop           bool
-	irq            bool
-}
-
 func (d *DMC) writeControl(value byte) {
 	d.irq = value&0x80 == 0x80
 	d.loop = value&0x40 == 0x40
@@ -524,11 +508,11 @@ func (d *DMC) restart() {
 	d.currentLength = d.sampleLength
 }
 
-func (d *DMC) stepTimer() {
+func (d *DMC) stepTimer(console *Console) {
 	if !d.enabled {
 		return
 	}
-	d.stepReader()
+	d.stepReader(console)
 	if d.tickValue == 0 {
 		d.tickValue = d.tickPeriod
 		d.stepShifter()
@@ -537,10 +521,10 @@ func (d *DMC) stepTimer() {
 	}
 }
 
-func (d *DMC) stepReader() {
+func (d *DMC) stepReader(console *Console) {
 	if d.currentLength > 0 && d.bitCount == 0 {
 		d.cpu.stall += 4
-		d.shiftRegister = d.cpu.Read(d.currentAddress)
+		d.shiftRegister = ReadByte(console, d.currentAddress)
 		d.bitCount = 8
 		d.currentAddress++
 		if d.currentAddress == 0 {

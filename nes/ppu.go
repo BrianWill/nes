@@ -176,7 +176,7 @@ func (ppu *PPU) writeDMA(value byte) {
 	cpu := ppu.console.CPU
 	address := uint16(value) << 8
 	for i := 0; i < 256; i++ {
-		ppu.oamData[ppu.oamAddress] = cpu.Read(address)
+		ppu.oamData[ppu.oamAddress] = ReadByte(ppu.console, address)
 		ppu.oamAddress++
 		address++
 	}

@@ -55,7 +55,7 @@ func Run(paths []string) {
 			switch v:= d.view.(type) {
 			case *GameView:
 				d.window.SetKeyCallback(nil)
-				v.console.SetAudioChannel(nil)
+				nes.SetAudioChannel(v.console, nil)
 				// save sram
 				cartridge := v.console.Cartridge
 				if cartridge.Battery != 0 {
@@ -72,15 +72,15 @@ func Run(paths []string) {
 			case *GameView:
 				gl.ClearColor(0, 0, 0, 1)
 				d.window.SetTitle(v.title)
-				v.console.SetAudioChannel(d.audio.channel)
+				nes.SetAudioChannel(v.console, d.audio.channel)
 				d.window.SetKeyCallback(
 					func (window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 						if action == glfw.Press {
 							switch key {
 							case glfw.KeySpace:
-								screenshot(v.console.Buffer())
+								screenshot(nes.Buffer(v.console))
 							case glfw.KeyR:
-								v.console.Reset()
+								nes.Reset(v.console)
 							case glfw.KeyTab:
 								if v.record {
 									v.record = false
@@ -389,12 +389,12 @@ func Run(paths []string) {
 					k1 := readKeys(d.window, turbo)
 					j1 := readJoystick(glfw.Joystick1, turbo)
 					j2 := readJoystick(glfw.Joystick2, turbo)
-					v.console.SetButtons1(combineButtons(k1, j1))
-					v.console.SetButtons2(j2)
+					nes.SetButtons1(v.console, combineButtons(k1, j1))
+					nes.SetButtons2(v.console, j2)
 				}
-				v.console.StepSeconds(dt)
+				nes.StepSeconds(v.console, dt)
 				gl.BindTexture(gl.TEXTURE_2D, v.texture)
-				setTexture(v.console.Buffer())
+				setTexture(nes.Buffer(v.console))
 				// draw buffer
 				{
 					w, h := d.window.GetFramebufferSize()
@@ -422,7 +422,7 @@ func Run(paths []string) {
 				}
 				gl.BindTexture(gl.TEXTURE_2D, 0)
 				if v.record {
-					v.frames = append(v.frames, copyImage(v.console.Buffer()))
+					v.frames = append(v.frames, copyImage(nes.Buffer(v.console)))
 				}
 			case *MenuView:
 				// check buttons

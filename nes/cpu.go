@@ -1,10 +1,11 @@
 package nes
 
 // Reset resets the CPU to its initial powerup state
-func (cpu *CPU) Reset() {
-	cpu.PC = cpu.Read16(0xFFFC)
+func Reset(console *Console) {
+	cpu := console.CPU
+	cpu.PC = Read16(console, 0xFFFC)
 	cpu.SP = 0xFD
-	cpu.SetFlags(0x24)
+	SetFlags(cpu, 0x24)
 }
 
 // pagesDiffer returns true if the two addresses reference different pages
@@ -14,15 +15,15 @@ func pagesDiffer(a, b uint16) bool {
 
 // addBranchCycles adds a cycle for taking a branch and adds another cycle
 // if the branch jumps to a new page
-func (cpu *CPU) addBranchCycles(info *stepInfo) {
+func addBranchCycles(cpu *CPU, address uint16, pc uint16) {
 	cpu.Cycles++
-	if pagesDiffer(info.pc, info.address) {
+	if pagesDiffer(pc, address) {
 		cpu.Cycles++
 	}
 }
 
-func (cpu *CPU) compare(a, b byte) {
-	cpu.setZN(a - b)
+func compare(cpu *CPU, a, b byte) {
+	setZN(cpu, a - b)
 	if a >= b {
 		cpu.C = 1
 	} else {
@@ -31,51 +32,53 @@ func (cpu *CPU) compare(a, b byte) {
 }
 
 // Read16 reads two bytes using Read to return a double-word value
-func (cpu *CPU) Read16(address uint16) uint16 {
-	lo := uint16(cpu.Read(address))
-	hi := uint16(cpu.Read(address + 1))
+func Read16(console *Console, address uint16) uint16 {
+	lo := uint16(ReadByte(console, address))
+	hi := uint16(ReadByte(console, address + 1))
 	return hi<<8 | lo
 }
 
 // read16bug emulates a 6502 bug that caused the low byte to wrap without
 // incrementing the high byte
-func (cpu *CPU) read16bug(address uint16) uint16 {
+func read16bug(console *Console, address uint16) uint16 {
 	a := address
 	b := (a & 0xFF00) | uint16(byte(a)+1)
-	lo := cpu.Read(a)
-	hi := cpu.Read(b)
+	lo := ReadByte(console, a)
+	hi := ReadByte(console, b)
 	return uint16(hi)<<8 | uint16(lo)
 }
 
 // push pushes a byte onto the stack
-func (cpu *CPU) push(value byte) {
-	cpu.Write(0x100|uint16(cpu.SP), value)
+func push(console *Console, value byte) {
+	cpu := console.CPU
+	WriteByte(console, 0x100|uint16(cpu.SP), value)
 	cpu.SP--
 }
 
 // pull pops a byte from the stack
-func (cpu *CPU) pull() byte {
+func pull(console *Console) byte {
+	cpu := console.CPU
 	cpu.SP++
-	return cpu.Read(0x100 | uint16(cpu.SP))
+	return ReadByte(console, 0x100 | uint16(cpu.SP))
 }
 
 // push16 pushes two bytes onto the stack
-func (cpu *CPU) push16(value uint16) {
+func push16(console *Console, value uint16) {
 	hi := byte(value >> 8)
 	lo := byte(value & 0xFF)
-	cpu.push(hi)
-	cpu.push(lo)
+	push(console, hi)
+	push(console, lo)
 }
 
 // pull16 pops two bytes from the stack
-func (cpu *CPU) pull16() uint16 {
-	lo := uint16(cpu.pull())
-	hi := uint16(cpu.pull())
+func pull16(console *Console) uint16 {
+	lo := uint16(pull(console))
+	hi := uint16(pull(console))
 	return hi<<8 | lo
 }
 
 // SetFlags sets the processor status flags
-func (cpu *CPU) SetFlags(flags byte) {
+func SetFlags(cpu *CPU, flags byte) {
 	cpu.C = (flags >> 0) & 1
 	cpu.Z = (flags >> 1) & 1
 	cpu.I = (flags >> 2) & 1
@@ -87,7 +90,7 @@ func (cpu *CPU) SetFlags(flags byte) {
 }
 
 // setZ sets the zero flag if the argument is zero
-func (cpu *CPU) setZ(value byte) {
+func setZ(cpu *CPU, value byte) {
 	if value == 0 {
 		cpu.Z = 1
 	} else {
@@ -96,7 +99,7 @@ func (cpu *CPU) setZ(value byte) {
 }
 
 // setN sets the negative flag if the argument is negative (high bit is set)
-func (cpu *CPU) setN(value byte) {
+func setN(cpu *CPU, value byte) {
 	if value&0x80 != 0 {
 		cpu.N = 1
 	} else {
@@ -105,13 +108,13 @@ func (cpu *CPU) setN(value byte) {
 }
 
 // setZN sets the zero flag and the negative flag
-func (cpu *CPU) setZN(value byte) {
-	cpu.setZ(value)
-	cpu.setN(value)
+func setZN(cpu *CPU, value byte) {
+	setZ(cpu, value)
+	setN(cpu, value)
 }
 
 // triggerIRQ causes an IRQ interrupt to occur on the next cycle
-func (cpu *CPU) triggerIRQ() {
+func triggerIRQ(cpu *CPU) {
 	if cpu.I == 0 {
 		cpu.interrupt = interruptIRQ
 	}
@@ -120,30 +123,36 @@ func (cpu *CPU) triggerIRQ() {
 // Step executes a single CPU instruction
 
 // NMI - Non-Maskable Interrupt
-func (cpu *CPU) nmi() {
-	cpu.push16(cpu.PC)
-	cpu.php(nil)
-	cpu.PC = cpu.Read16(0xFFFA)
+func nmi(console *Console) {
+	cpu := console.CPU
+	push16(console, cpu.PC)
+	php(console, 0, 0, 0)
+	cpu.PC = Read16(console, 0xFFFA)
 	cpu.I = 1
 	cpu.Cycles += 7
 }
 
 // IRQ - IRQ Interrupt
-func (cpu *CPU) irq() {
-	cpu.push16(cpu.PC)
-	cpu.php(nil)
-	cpu.PC = cpu.Read16(0xFFFE)
+func irq(console *Console) {
+	cpu := console.CPU
+	push16(console, cpu.PC)
+	php(console, 0, 0, 0)
+	cpu.PC = Read16(console, 0xFFFE)
 	cpu.I = 1
 	cpu.Cycles += 7
 }
 
+
+// OPCODES
+
 // ADC - Add with Carry
-func (cpu *CPU) adc(info *stepInfo) {
+func adc(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	a := cpu.A
-	b := cpu.Read(info.address)
+	b := ReadByte(console, address)
 	c := cpu.C
 	cpu.A = a + b + c
-	cpu.setZN(cpu.A)
+	setZN(cpu, cpu.A)
 	if int(a)+int(b)+int(c) > 0xFF {
 		cpu.C = 1
 	} else {
@@ -157,249 +166,284 @@ func (cpu *CPU) adc(info *stepInfo) {
 }
 
 // AND - Logical AND
-func (cpu *CPU) and(info *stepInfo) {
-	cpu.A = cpu.A & cpu.Read(info.address)
-	cpu.setZN(cpu.A)
+func and(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.A = cpu.A & ReadByte(console, address)
+	setZN(cpu, cpu.A)
 }
 
 // ASL - Arithmetic Shift Left
-func (cpu *CPU) asl(info *stepInfo) {
-	if info.mode == modeAccumulator {
+func asl(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	if mode == modeAccumulator {
 		cpu.C = (cpu.A >> 7) & 1
 		cpu.A <<= 1
-		cpu.setZN(cpu.A)
+		setZN(cpu, cpu.A)
 	} else {
-		value := cpu.Read(info.address)
+		value := ReadByte(console, address)
 		cpu.C = (value >> 7) & 1
 		value <<= 1
-		cpu.Write(info.address, value)
-		cpu.setZN(value)
+		WriteByte(console, address, value)
+		setZN(cpu, value)
 	}
 }
 
 // BCC - Branch if Carry Clear
-func (cpu *CPU) bcc(info *stepInfo) {
+func bcc(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.C == 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // BCS - Branch if Carry Set
-func (cpu *CPU) bcs(info *stepInfo) {
+func bcs(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.C != 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // BEQ - Branch if Equal
-func (cpu *CPU) beq(info *stepInfo) {
+func beq(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.Z != 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // BIT - Bit Test
-func (cpu *CPU) bit(info *stepInfo) {
-	value := cpu.Read(info.address)
+func bit(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	value := ReadByte(console, address)
 	cpu.V = (value >> 6) & 1
-	cpu.setZ(value & cpu.A)
-	cpu.setN(value)
+	setZ(cpu, value & cpu.A)
+	setN(cpu, value)
 }
 
 // BMI - Branch if Minus
-func (cpu *CPU) bmi(info *stepInfo) {
+func bmi(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.N != 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // BNE - Branch if Not Equal
-func (cpu *CPU) bne(info *stepInfo) {
+func bne(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.Z == 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // BPL - Branch if Positive
-func (cpu *CPU) bpl(info *stepInfo) {
+func bpl(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.N == 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // BRK - Force Interrupt
-func (cpu *CPU) brk(info *stepInfo) {
-	cpu.push16(cpu.PC)
-	cpu.php(info)
-	cpu.sei(info)
-	cpu.PC = cpu.Read16(0xFFFE)
+func brk(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	push16(console, cpu.PC)
+	php(console, address, pc, mode)
+	sei(console, address, pc, mode)
+	cpu.PC = Read16(console, 0xFFFE)
 }
 
 // BVC - Branch if Overflow Clear
-func (cpu *CPU) bvc(info *stepInfo) {
+func bvc(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.V == 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // BVS - Branch if Overflow Set
-func (cpu *CPU) bvs(info *stepInfo) {
+func bvs(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	if cpu.V != 0 {
-		cpu.PC = info.address
-		cpu.addBranchCycles(info)
+		cpu.PC = address
+		addBranchCycles(cpu, address, pc)
 	}
 }
 
 // CLC - Clear Carry Flag
-func (cpu *CPU) clc(info *stepInfo) {
+func clc(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.C = 0
 }
 
 // CLD - Clear Decimal Mode
-func (cpu *CPU) cld(info *stepInfo) {
+func cld(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.D = 0
 }
 
 // CLI - Clear Interrupt Disable
-func (cpu *CPU) cli(info *stepInfo) {
+func cli(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.I = 0
 }
 
 // CLV - Clear Overflow Flag
-func (cpu *CPU) clv(info *stepInfo) {
+func clv(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.V = 0
 }
 
 // CMP - Compare
-func (cpu *CPU) cmp(info *stepInfo) {
-	value := cpu.Read(info.address)
-	cpu.compare(cpu.A, value)
+func cmp(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	value := ReadByte(console, address)
+	compare(cpu, cpu.A, value)
 }
 
 // CPX - Compare X Register
-func (cpu *CPU) cpx(info *stepInfo) {
-	value := cpu.Read(info.address)
-	cpu.compare(cpu.X, value)
+func cpx(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	value := ReadByte(console, address)
+	compare(cpu, cpu.X, value)
 }
 
 // CPY - Compare Y Register
-func (cpu *CPU) cpy(info *stepInfo) {
-	value := cpu.Read(info.address)
-	cpu.compare(cpu.Y, value)
+func cpy(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	value := ReadByte(console, address)
+	compare(cpu, cpu.Y, value)
 }
 
 // DEC - Decrement Memory
-func (cpu *CPU) dec(info *stepInfo) {
-	value := cpu.Read(info.address) - 1
-	cpu.Write(info.address, value)
-	cpu.setZN(value)
+func dec(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	value := ReadByte(console, address) - 1
+	WriteByte(console, address, value)
+	setZN(cpu, value)
 }
 
 // DEX - Decrement X Register
-func (cpu *CPU) dex(info *stepInfo) {
+func dex(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.X--
-	cpu.setZN(cpu.X)
+	setZN(cpu, cpu.X)
 }
 
 // DEY - Decrement Y Register
-func (cpu *CPU) dey(info *stepInfo) {
+func dey(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.Y--
-	cpu.setZN(cpu.Y)
+	setZN(cpu, cpu.Y)
 }
 
 // EOR - Exclusive OR
-func (cpu *CPU) eor(info *stepInfo) {
-	cpu.A = cpu.A ^ cpu.Read(info.address)
-	cpu.setZN(cpu.A)
+func eor(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.A = cpu.A ^ ReadByte(console, address)
+	setZN(cpu, cpu.A)
 }
 
 // INC - Increment Memory
-func (cpu *CPU) inc(info *stepInfo) {
-	value := cpu.Read(info.address) + 1
-	cpu.Write(info.address, value)
-	cpu.setZN(value)
+func inc(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	value := ReadByte(console, address) + 1
+	WriteByte(console, address, value)
+	setZN(cpu, value)
 }
 
 // INX - Increment X Register
-func (cpu *CPU) inx(info *stepInfo) {
+func inx(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.X++
-	cpu.setZN(cpu.X)
+	setZN(cpu, cpu.X)
 }
 
 // INY - Increment Y Register
-func (cpu *CPU) iny(info *stepInfo) {
+func iny(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.Y++
-	cpu.setZN(cpu.Y)
+	setZN(cpu, cpu.Y)
 }
 
 // JMP - Jump
-func (cpu *CPU) jmp(info *stepInfo) {
-	cpu.PC = info.address
+func jmp(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.PC = address
 }
 
 // JSR - Jump to Subroutine
-func (cpu *CPU) jsr(info *stepInfo) {
-	cpu.push16(cpu.PC - 1)
-	cpu.PC = info.address
+func jsr(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	push16(console, cpu.PC - 1)
+	cpu.PC = address
 }
 
 // LDA - Load Accumulator
-func (cpu *CPU) lda(info *stepInfo) {
-	cpu.A = cpu.Read(info.address)
-	cpu.setZN(cpu.A)
+func lda(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.A = ReadByte(console, address)
+	setZN(cpu, cpu.A)
 }
 
 // LDX - Load X Register
-func (cpu *CPU) ldx(info *stepInfo) {
-	cpu.X = cpu.Read(info.address)
-	cpu.setZN(cpu.X)
+func ldx(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.X = ReadByte(console, address)
+	setZN(cpu, cpu.X)
 }
 
 // LDY - Load Y Register
-func (cpu *CPU) ldy(info *stepInfo) {
-	cpu.Y = cpu.Read(info.address)
-	cpu.setZN(cpu.Y)
+func ldy(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.Y = ReadByte(console, address)
+	setZN(cpu, cpu.Y)
 }
 
 // LSR - Logical Shift Right
-func (cpu *CPU) lsr(info *stepInfo) {
-	if info.mode == modeAccumulator {
+func lsr(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	if mode == modeAccumulator {
 		cpu.C = cpu.A & 1
 		cpu.A >>= 1
-		cpu.setZN(cpu.A)
+		setZN(cpu, cpu.A)
 	} else {
-		value := cpu.Read(info.address)
+		value := ReadByte(console, address)
 		cpu.C = value & 1
 		value >>= 1
-		cpu.Write(info.address, value)
-		cpu.setZN(value)
+		WriteByte(console, address, value)
+		setZN(cpu, value)
 	}
 }
 
 // NOP - No Operation
-func (cpu *CPU) nop(info *stepInfo) {
+func nop(console *Console, address uint16, pc uint16, mode byte) {
 }
 
 // ORA - Logical Inclusive OR
-func (cpu *CPU) ora(info *stepInfo) {
-	cpu.A = cpu.A | cpu.Read(info.address)
-	cpu.setZN(cpu.A)
+func ora(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.A = cpu.A | ReadByte(console, address)
+	setZN(cpu, cpu.A)
 }
 
 // PHA - Push Accumulator
-func (cpu *CPU) pha(info *stepInfo) {
-	cpu.push(cpu.A)
+func pha(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	push(console, cpu.A)
 }
 
 // PHP - Push Processor Status
-func (cpu *CPU) php(info *stepInfo) {
+func php(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	var flags byte
 	flags |= cpu.C << 0
 	flags |= cpu.Z << 1
@@ -409,72 +453,79 @@ func (cpu *CPU) php(info *stepInfo) {
 	flags |= cpu.U << 5
 	flags |= cpu.V << 6
 	flags |= cpu.N << 7
-	cpu.push(flags | 0x10)
+	push(console, flags | 0x10)
 }
 
 // PLA - Pull Accumulator
-func (cpu *CPU) pla(info *stepInfo) {
-	cpu.A = cpu.pull()
-	cpu.setZN(cpu.A)
+func pla(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.A = pull(console)
+	setZN(cpu, cpu.A)
 }
 
 // PLP - Pull Processor Status
-func (cpu *CPU) plp(info *stepInfo) {
-	cpu.SetFlags(cpu.pull()&0xEF | 0x20)
+func plp(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	SetFlags(cpu, pull(console)&0xEF | 0x20)
 }
 
 // ROL - Rotate Left
-func (cpu *CPU) rol(info *stepInfo) {
-	if info.mode == modeAccumulator {
+func rol(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	if mode == modeAccumulator {
 		c := cpu.C
 		cpu.C = (cpu.A >> 7) & 1
 		cpu.A = (cpu.A << 1) | c
-		cpu.setZN(cpu.A)
+		setZN(cpu, cpu.A)
 	} else {
 		c := cpu.C
-		value := cpu.Read(info.address)
+		value := ReadByte(console, address)
 		cpu.C = (value >> 7) & 1
 		value = (value << 1) | c
-		cpu.Write(info.address, value)
-		cpu.setZN(value)
+		WriteByte(console, address, value)
+		setZN(cpu, value)
 	}
 }
 
 // ROR - Rotate Right
-func (cpu *CPU) ror(info *stepInfo) {
-	if info.mode == modeAccumulator {
+func ror(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	if mode == modeAccumulator {
 		c := cpu.C
 		cpu.C = cpu.A & 1
 		cpu.A = (cpu.A >> 1) | (c << 7)
-		cpu.setZN(cpu.A)
+		setZN(cpu, cpu.A)
 	} else {
 		c := cpu.C
-		value := cpu.Read(info.address)
+		value := ReadByte(console, address)
 		cpu.C = value & 1
 		value = (value >> 1) | (c << 7)
-		cpu.Write(info.address, value)
-		cpu.setZN(value)
+		WriteByte(console, address, value)
+		setZN(cpu, value)
 	}
 }
 
 // RTI - Return from Interrupt
-func (cpu *CPU) rti(info *stepInfo) {
-	cpu.SetFlags(cpu.pull()&0xEF | 0x20)
-	cpu.PC = cpu.pull16()
+func rti(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	SetFlags(cpu, pull(console)&0xEF | 0x20)
+	cpu.PC = pull16(console)
 }
 
 // RTS - Return from Subroutine
-func (cpu *CPU) rts(info *stepInfo) {
-	cpu.PC = cpu.pull16() + 1
+func rts(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	cpu.PC = pull16(console) + 1
 }
 
 // SBC - Subtract with Carry
-func (cpu *CPU) sbc(info *stepInfo) {
+func sbc(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	a := cpu.A
-	b := cpu.Read(info.address)
+	b := ReadByte(console, address)
 	c := cpu.C
 	cpu.A = a - b - (1 - c)
-	cpu.setZN(cpu.A)
+	setZN(cpu, cpu.A)
 	if int(a)-int(b)-int(1-c) >= 0 {
 		cpu.C = 1
 	} else {
@@ -488,125 +539,137 @@ func (cpu *CPU) sbc(info *stepInfo) {
 }
 
 // SEC - Set Carry Flag
-func (cpu *CPU) sec(info *stepInfo) {
+func sec(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.C = 1
 }
 
 // SED - Set Decimal Flag
-func (cpu *CPU) sed(info *stepInfo) {
+func sed(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.D = 1
 }
 
 // SEI - Set Interrupt Disable
-func (cpu *CPU) sei(info *stepInfo) {
+func sei(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.I = 1
 }
 
 // STA - Store Accumulator
-func (cpu *CPU) sta(info *stepInfo) {
-	cpu.Write(info.address, cpu.A)
+func sta(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	WriteByte(console, address, cpu.A)
 }
 
 // STX - Store X Register
-func (cpu *CPU) stx(info *stepInfo) {
-	cpu.Write(info.address, cpu.X)
+func stx(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	WriteByte(console, address, cpu.X)
 }
 
 // STY - Store Y Register
-func (cpu *CPU) sty(info *stepInfo) {
-	cpu.Write(info.address, cpu.Y)
+func sty(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
+	WriteByte(console, address, cpu.Y)
 }
 
 // TAX - Transfer Accumulator to X
-func (cpu *CPU) tax(info *stepInfo) {
+func tax(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.X = cpu.A
-	cpu.setZN(cpu.X)
+	setZN(cpu, cpu.X)
 }
 
 // TAY - Transfer Accumulator to Y
-func (cpu *CPU) tay(info *stepInfo) {
+func tay(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.Y = cpu.A
-	cpu.setZN(cpu.Y)
+	setZN(cpu, cpu.Y)
 }
 
 // TSX - Transfer Stack Pointer to X
-func (cpu *CPU) tsx(info *stepInfo) {
+func tsx(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.X = cpu.SP
-	cpu.setZN(cpu.X)
+	setZN(cpu, cpu.X)
 }
 
 // TXA - Transfer X to Accumulator
-func (cpu *CPU) txa(info *stepInfo) {
+func txa(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.A = cpu.X
-	cpu.setZN(cpu.A)
+	setZN(cpu, cpu.A)
 }
 
 // TXS - Transfer X to Stack Pointer
-func (cpu *CPU) txs(info *stepInfo) {
+func txs(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.SP = cpu.X
 }
 
 // TYA - Transfer Y to Accumulator
-func (cpu *CPU) tya(info *stepInfo) {
+func tya(console *Console, address uint16, pc uint16, mode byte) {
+	cpu := console.CPU
 	cpu.A = cpu.Y
-	cpu.setZN(cpu.A)
+	setZN(cpu, cpu.A)
 }
 
 // illegal opcodes below
 
-func (cpu *CPU) ahx(info *stepInfo) {
+func ahx(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) alr(info *stepInfo) {
+func alr(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) anc(info *stepInfo) {
+func anc(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) arr(info *stepInfo) {
+func arr(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) axs(info *stepInfo) {
+func axs(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) dcp(info *stepInfo) {
+func dcp(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) isc(info *stepInfo) {
+func isc(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) kil(info *stepInfo) {
+func kil(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) las(info *stepInfo) {
+func las(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) lax(info *stepInfo) {
+func lax(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) rla(info *stepInfo) {
+func rla(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) rra(info *stepInfo) {
+func rra(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) sax(info *stepInfo) {
+func sax(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) shx(info *stepInfo) {
+func shx(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) shy(info *stepInfo) {
+func shy(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) slo(info *stepInfo) {
+func slo(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) sre(info *stepInfo) {
+func sre(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) tas(info *stepInfo) {
+func tas(console *Console, address uint16, pc uint16, mode byte) {
 }
 
-func (cpu *CPU) xaa(info *stepInfo) {
+func xaa(console *Console, address uint16, pc uint16, mode byte) {
 }
