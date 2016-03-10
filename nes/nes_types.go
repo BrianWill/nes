@@ -28,6 +28,7 @@ type APU struct {
     frameIRQ    bool
 }
 
+// Delta Modulation Channel
 type DMC struct {
     cpu            *CPU
     enabled        bool

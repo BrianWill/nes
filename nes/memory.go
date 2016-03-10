@@ -22,7 +22,29 @@ func ReadByte(console *Console, address uint16) byte {
 	case address == 0x4014:
 		return console.PPU.readRegister(address)
 	case address == 0x4015:
-		return console.APU.readRegister(address)
+		// apu read register
+		apu := console.APU
+		switch address {
+		case 0x4015:
+			var readStatus byte
+			if apu.pulse1.lengthValue > 0 {
+				readStatus |= 1
+			}
+			if apu.pulse2.lengthValue > 0 {
+				readStatus |= 2
+			}
+			if apu.triangle.lengthValue > 0 {
+				readStatus |= 4
+			}
+			if apu.noise.lengthValue > 0 {
+				readStatus |= 8
+			}
+			if apu.dmc.currentLength > 0 {
+				readStatus |= 16
+			}
+			return readStatus
+		}
+		return 0
 	case address == 0x4016:
 		return readController(console.Controller1)
 	case address == 0x4017:
@@ -44,22 +66,144 @@ func WriteByte(console *Console, address uint16, value byte) {
 			c.index = 0
 		}
 	}
+
+	writeRegisterAPU :=  func (apu *APU, address uint16, value byte) {
+		pulseWriteControl := func (p *Pulse, value byte) {
+			p.dutyMode = (value >> 6) & 3
+			p.lengthEnabled = (value>>5)&1 == 0
+			p.envelopeLoop = (value>>5)&1 == 1
+			p.envelopeEnabled = (value>>4)&1 == 0
+			p.envelopePeriod = value & 15
+			p.constantVolume = value & 15
+			p.envelopeStart = true
+		}
+		pulseWriteSweep := func (p *Pulse, value byte) {
+			p.sweepEnabled = (value>>7)&1 == 1
+			p.sweepPeriod = (value >> 4) & 7
+			p.sweepNegate = (value>>3)&1 == 1
+			p.sweepShift = value & 7
+			p.sweepReload = true
+		}
+		pulseWriteTimerHigh := func (p *Pulse, value byte) {
+			p.lengthValue = lengthTable[value>>3]
+			p.timerPeriod = (p.timerPeriod & 0x00FF) | (uint16(value&7) << 8)
+			p.envelopeStart = true
+			p.dutyValue = 0
+		}
+
+		switch address {
+		case 0x4000:
+			pulseWriteControl(&apu.pulse1, value)
+		case 0x4001:
+			pulseWriteSweep(&apu.pulse1, value)
+		case 0x4002:
+			// write timer low
+			apu.pulse1.timerPeriod = (apu.pulse1.timerPeriod & 0xFF00) | uint16(value)
+		case 0x4003:
+			pulseWriteTimerHigh(&apu.pulse1, value)
+		case 0x4004:
+			pulseWriteControl(&apu.pulse2, value)
+		case 0x4005:
+			pulseWriteSweep(&apu.pulse2, value)
+		case 0x4006:
+			// write timer low
+			apu.pulse2.timerPeriod = (apu.pulse2.timerPeriod & 0xFF00) | uint16(value)
+		case 0x4007:
+			pulseWriteTimerHigh(&apu.pulse2, value)
+		case 0x4008:
+			// write control
+			apu.triangle.lengthEnabled = (value>>7)&1 == 0
+			apu.triangle.counterPeriod = value & 0x7F
+		case 0x4009:
+		case 0x4010:
+			// write control
+			apu.dmc.irq = value&0x80 == 0x80
+			apu.dmc.loop = value&0x40 == 0x40
+			apu.dmc.tickPeriod = dmcTable[value & 0x0F]
+		case 0x4011:
+			// write value
+			apu.dmc.value = value & 0x7F
+		case 0x4012:
+			// write address
+			apu.dmc.sampleAddress = 0xC000 | (uint16(value) << 6)
+		case 0x4013:
+			// write length
+			apu.dmc.sampleLength = (uint16(value) << 4) | 1
+		case 0x400A:
+			// write timer low
+			apu.triangle.timerPeriod = (apu.triangle.timerPeriod & 0xFF00) | uint16(value)
+		case 0x400B:
+			// write timer high
+			apu.triangle.lengthValue = lengthTable[value>>3]
+			apu.triangle.timerPeriod = (apu.triangle.timerPeriod & 0x00FF) | (uint16(value&7) << 8)
+			apu.triangle.timerValue = apu.triangle.timerPeriod
+			apu.triangle.counterReload = true
+		case 0x400C:
+			// write control
+			apu.noise.lengthEnabled = (value>>5)&1 == 0
+			apu.noise.envelopeLoop = (value>>5)&1 == 1
+			apu.noise.envelopeEnabled = (value>>4)&1 == 0
+			apu.noise.envelopePeriod = value & 15
+			apu.noise.constantVolume = value & 15
+			apu.noise.envelopeStart = true
+		case 0x400D:
+		case 0x400E:
+			// write period
+			apu.noise.mode = value&0x80 == 0x80
+			apu.noise.timerPeriod = noiseTable[value&0x0F]
+		case 0x400F:
+			// write length
+			apu.noise.lengthValue = lengthTable[value>>3]
+			apu.noise.envelopeStart = true
+		case 0x4015:
+			// apu write control
+			apu.pulse1.enabled = value&1 == 1
+			apu.pulse2.enabled = value&2 == 2
+			apu.triangle.enabled = value&4 == 4
+			apu.noise.enabled = value&8 == 8
+			apu.dmc.enabled = value&16 == 16
+			if !apu.pulse1.enabled {
+				apu.pulse1.lengthValue = 0
+			}
+			if !apu.pulse2.enabled {
+				apu.pulse2.lengthValue = 0
+			}
+			if !apu.triangle.enabled {
+				apu.triangle.lengthValue = 0
+			}
+			if !apu.noise.enabled {
+				apu.noise.lengthValue = 0
+			}
+			if !apu.dmc.enabled {
+				apu.dmc.currentLength = 0
+			} else {
+				if apu.dmc.currentLength == 0 {
+					dmcRestart(&apu.dmc)
+				}
+			}
+		case 0x4017:
+			// apu write frame counter
+			apu.framePeriod = 4 + (value>>7)&1
+			apu.frameIRQ = (value>>6)&1 == 0
+		}
+	}
+
 	switch {
 	case address < 0x2000:
 		console.RAM[address%0x0800] = value
 	case address < 0x4000:
 		console.PPU.writeRegister(0x2000+address%8, value)
 	case address < 0x4014:
-		console.APU.writeRegister(address, value)
+		writeRegisterAPU(console.APU, address, value)
 	case address == 0x4014:
 		console.PPU.writeRegister(address, value)
 	case address == 0x4015:
-		console.APU.writeRegister(address, value)
+		writeRegisterAPU(console.APU, address, value)
 	case address == 0x4016:
 		writeController(console.Controller1, value)
 		writeController(console.Controller2, value)
 	case address == 0x4017:
-		console.APU.writeRegister(address, value)
+		writeRegisterAPU(console.APU, address, value)
 	case address < 0x6000:
 		// TODO: I/O registers
 	case address >= 0x6000:

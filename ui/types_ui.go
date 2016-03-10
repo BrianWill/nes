@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"log"
 	"os/user"
-	
+
 	"github.com/BrianWill/nes/nes"
 	"github.com/go-gl/glfw/v3.1/glfw"
 	"github.com/gordonklaus/portaudio"
@@ -27,7 +27,7 @@ type Director struct {
 }
 
 type Audio struct {
-	stream  *portaudio.Stream
+	stream *portaudio.Stream
 	channel chan float32
 }
 

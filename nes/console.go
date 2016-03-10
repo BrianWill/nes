@@ -236,19 +236,284 @@ func StepSeconds(console *Console, seconds float64) {
 			}
 		}
 		for i := 0; i < cpuCycles; i++ {
-			console.APU.Step()
+			// step APU
+			apu := console.APU
+
+			stepEnvelope := func (apu *APU) {
+				pulseStepEvelope := func (p *Pulse) {
+					if p.envelopeStart {
+						p.envelopeVolume = 15
+						p.envelopeValue = p.envelopePeriod
+						p.envelopeStart = false
+					} else if p.envelopeValue > 0 {
+						p.envelopeValue--
+					} else {
+						if p.envelopeVolume > 0 {
+							p.envelopeVolume--
+						} else if p.envelopeLoop {
+							p.envelopeVolume = 15
+						}
+						p.envelopeValue = p.envelopePeriod
+					}
+				}
+				pulseStepEvelope(&apu.pulse1)
+				pulseStepEvelope(&apu.pulse2)
+
+				t := &apu.triangle
+				if t.counterReload {
+					t.counterValue = t.counterPeriod
+				} else if t.counterValue > 0 {
+					t.counterValue--
+				}
+				if t.lengthEnabled {
+					t.counterReload = false
+				}
+
+				n := &apu.noise
+				if n.envelopeStart {
+					n.envelopeVolume = 15
+					n.envelopeValue = n.envelopePeriod
+					n.envelopeStart = false
+				} else if n.envelopeValue > 0 {
+					n.envelopeValue--
+				} else {
+					if n.envelopeVolume > 0 {
+						n.envelopeVolume--
+					} else if n.envelopeLoop {
+						n.envelopeVolume = 15
+					}
+					n.envelopeValue = n.envelopePeriod
+				}
+			}
+
+			stepLength := func (apu *APU)  {
+				if apu.pulse1.lengthEnabled && apu.pulse1.lengthValue > 0 {
+					apu.pulse1.lengthValue--
+				}
+				if apu.pulse2.lengthEnabled && apu.pulse2.lengthValue > 0 {
+					apu.pulse2.lengthValue--
+				}
+				if apu.triangle.lengthEnabled && apu.triangle.lengthValue > 0 {
+					apu.triangle.lengthValue--
+				}
+				if apu.noise.lengthEnabled && apu.noise.lengthValue > 0 {
+					apu.noise.lengthValue--
+				}
+			}
+
+			cycle1 := apu.cycle
+			apu.cycle++
+			cycle2 := apu.cycle
+
+			// step timers
+			{
+				if apu.cycle % 2 == 0 {
+					stepPulseTimer := func (p *Pulse) {
+						if p.timerValue == 0 {
+							p.timerValue = p.timerPeriod
+							p.dutyValue = (p.dutyValue + 1) % 8
+						} else {
+							p.timerValue--
+						}
+					}
+					stepPulseTimer(&apu.pulse1)
+					stepPulseTimer(&apu.pulse2)
+
+					n := &apu.noise
+					if n.timerValue == 0 {
+						n.timerValue = n.timerPeriod
+						var shift byte
+						if n.mode {
+							shift = 6
+						} else {
+							shift = 1
+						}
+						b1 := n.shiftRegister & 1
+						b2 := (n.shiftRegister >> shift) & 1
+						n.shiftRegister >>= 1
+						n.shiftRegister |= (b1 ^ b2) << 14
+					} else {
+						n.timerValue--
+					}
+
+					d := &apu.dmc
+					if d.enabled {
+						// step reader
+						if d.currentLength > 0 && d.bitCount == 0 {
+							d.cpu.stall += 4
+							d.shiftRegister = ReadByte(apu.console, d.currentAddress)
+							d.bitCount = 8
+							d.currentAddress++
+							if d.currentAddress == 0 {
+								d.currentAddress = 0x8000
+							}
+							d.currentLength--
+							if d.currentLength == 0 && d.loop {
+								dmcRestart(d)
+							}
+						}
+
+						if d.tickValue == 0 {
+							d.tickValue = d.tickPeriod
+							
+							// step shifter
+							if d.bitCount != 0 {
+								if d.shiftRegister&1 == 1 {
+									if d.value <= 125 {
+										d.value += 2
+									}
+								} else {
+									if d.value >= 2 {
+										d.value -= 2
+									}
+								}
+								d.shiftRegister >>= 1
+								d.bitCount--
+							}
+						} else {
+							d.tickValue--
+						}
+					}
+				}
+
+				t := &apu.triangle
+				if t.timerValue == 0 {
+					t.timerValue = t.timerPeriod
+					if t.lengthValue > 0 && t.counterValue > 0 {
+						t.dutyValue = (t.dutyValue + 1) % 32
+					}
+				} else {
+					t.timerValue--
+				}
+			}
+			
+			f1 := int(float64(cycle1) / frameCounterRate)
+			f2 := int(float64(cycle2) / frameCounterRate)
+			if f1 != f2 {
+				// step frame counters:
+
+				stepSweep := func (apu *APU) {
+					pulseStepSweep := func (p *Pulse)  {
+						sweep := func (p *Pulse) {
+							delta := p.timerPeriod >> p.sweepShift
+							if p.sweepNegate {
+								p.timerPeriod -= delta
+								if p.channel == 1 {
+									p.timerPeriod--
+								}
+							} else {
+								p.timerPeriod += delta
+							}
+						}
+
+						if p.sweepReload {
+							if p.sweepEnabled && p.sweepValue == 0 {
+								sweep(p)
+							}
+							p.sweepValue = p.sweepPeriod
+							p.sweepReload = false
+						} else if p.sweepValue > 0 {
+							p.sweepValue--
+						} else {
+							if p.sweepEnabled {
+								sweep(p)
+							}
+							p.sweepValue = p.sweepPeriod
+						}
+					}
+					pulseStepSweep(&apu.pulse1)
+					pulseStepSweep(&apu.pulse2)
+				}
+
+				// mode 0:    mode 1:       function
+				// ---------  -----------  -----------------------------
+				//  - - - f    - - - - -    IRQ (if bit 6 is clear)
+				//  - l - l    l - l - -    Length counter and sweep
+				//  e e e e    e e e e -    Envelope and linear counter
+				switch apu.framePeriod {
+				case 4:
+					apu.frameValue = (apu.frameValue + 1) % 4
+					switch apu.frameValue {
+					case 0, 2:
+						stepEnvelope(apu)
+					case 1:
+						stepEnvelope(apu)
+						stepSweep(apu)
+						stepLength(apu)
+					case 3:
+						stepEnvelope(apu)
+						stepSweep(apu)
+						stepLength(apu)
+						// fire IRQ
+						if apu.frameIRQ {
+							triggerIRQ(apu.console.CPU)
+						}
+					}
+				case 5:
+					apu.frameValue = (apu.frameValue + 1) % 5
+					switch apu.frameValue {
+					case 1, 3:
+						stepEnvelope(apu)
+					case 0, 2:
+						stepEnvelope(apu)
+						stepSweep(apu)
+						stepLength(apu)
+					}
+				}
+			}
+			s1 := int(float64(cycle1) / sampleRate)
+			s2 := int(float64(cycle2) / sampleRate)
+			if s1 != s2 {
+				// pulse output
+				pulseOutput := func (p *Pulse) byte {
+					if !p.enabled || p.lengthValue == 0 || dutyTable[p.dutyMode][p.dutyValue] == 0 || p.timerPeriod < 8 || p.timerPeriod > 0x7FF {
+						return 0
+					} else if p.envelopeEnabled {
+						return p.envelopeVolume
+					} else {
+						return p.constantVolume
+					}
+				}
+				p1Out := pulseOutput(&apu.pulse1)
+				p2Out := pulseOutput(&apu.pulse2)
+
+				// triangle output
+				t := &apu.triangle
+				var tOut byte
+				if !t.enabled || t.lengthValue == 0 || t.counterValue == 0 {
+					tOut = 0
+				} else {
+					tOut = triangleTable[t.dutyValue]
+				}
+
+				// noise output
+				n := &apu.noise
+				var nOut byte
+				if !n.enabled || n.lengthValue == 0 || (n.shiftRegister & 1) == 1 {
+					nOut = 0
+				} else if n.envelopeEnabled {
+					nOut = n.envelopeVolume
+				} else {
+					nOut = n.constantVolume
+				}
+
+				// dmc output
+				dOut := apu.dmc.value
+
+				output := tndTable[(3 * tOut) + (2 * nOut) + dOut] + pulseTable[p1Out + p2Out]
+				select {
+				case apu.channel <- output:
+				default:
+				}
+			}
 		}
 		cycles -= cpuCycles
 	}
 }
 
-func executeInstruction(cpu *CPU, opcode byte, address, pc uint16, mode byte) {
-	switch opcode {
-	case 0:
-	case 1:
-	case 2:
-	case 3:
-	}
+func dmcRestart(d *DMC) {
+	d.currentAddress = d.sampleAddress
+	d.currentLength = d.sampleLength
 }
 
 func Buffer(console *Console) *image.RGBA {

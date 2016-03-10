@@ -22,6 +22,7 @@ func addBranchCycles(cpu *CPU, address uint16, pc uint16) {
 	}
 }
 
+// btw: give this a more descriptive name? 
 func compare(cpu *CPU, a, b byte) {
 	setZN(cpu, a - b)
 	if a >= b {
