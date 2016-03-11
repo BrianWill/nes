@@ -26,28 +26,6 @@ func (ppu *PPU) readRegister(address uint16) byte {
 	return 0
 }
 
-func (ppu *PPU) writeRegister(address uint16, value byte) {
-	ppu.register = value
-	switch address {
-	case 0x2000:
-		ppu.writeControl(value)
-	case 0x2001:
-		ppu.writeMask(value)
-	case 0x2003:
-		ppu.writeOAMAddress(value)
-	case 0x2004:
-		ppu.writeOAMData(value)
-	case 0x2005:
-		ppu.writeScroll(value)
-	case 0x2006:
-		ppu.writeAddress(value)
-	case 0x2007:
-		ppu.writeData(value)
-	case 0x4014:
-		ppu.writeDMA(value)
-	}
-}
-
 // $2000: PPUCTRL
 func (ppu *PPU) writeControl(value byte) {
 	ppu.flagNameTable = (value >> 0) & 3
@@ -143,14 +121,15 @@ func (ppu *PPU) writeAddress(value byte) {
 
 // $2007: PPUDATA (read)
 func (ppu *PPU) readData() byte {
-	value := ppu.Read(ppu.v)
+	value := readPPU(ppu.console, ppu.v)
+
 	// emulate buffered reads
 	if ppu.v%0x4000 < 0x3F00 {
 		buffered := ppu.bufferedData
 		ppu.bufferedData = value
 		value = buffered
 	} else {
-		ppu.bufferedData = ppu.Read(ppu.v - 0x1000)
+		ppu.bufferedData = readPPU(ppu.console, ppu.v - 0x1000)
 	}
 	// increment address
 	if ppu.flagIncrement == 0 {
@@ -163,7 +142,7 @@ func (ppu *PPU) readData() byte {
 
 // $2007: PPUDATA (write)
 func (ppu *PPU) writeData(value byte) {
-	ppu.Write(ppu.v, value)
+	writePPU(ppu.console, ppu.v, value)
 	if ppu.flagIncrement == 0 {
 		ppu.v += 1
 	} else {
@@ -266,14 +245,14 @@ func (ppu *PPU) clearVerticalBlank() {
 func (ppu *PPU) fetchNameTableByte() {
 	v := ppu.v
 	address := 0x2000 | (v & 0x0FFF)
-	ppu.nameTableByte = ppu.Read(address)
+	ppu.nameTableByte = readPPU(ppu.console, address)
 }
 
 func (ppu *PPU) fetchAttributeTableByte() {
 	v := ppu.v
 	address := 0x23C0 | (v & 0x0C00) | ((v >> 4) & 0x38) | ((v >> 2) & 0x07)
 	shift := ((v >> 4) & 4) | (v & 2)
-	ppu.attributeTableByte = ((ppu.Read(address) >> shift) & 3) << 2
+	ppu.attributeTableByte = ((readPPU(ppu.console, address) >> shift) & 3) << 2
 }
 
 func (ppu *PPU) fetchLowTileByte() {
@@ -281,7 +260,7 @@ func (ppu *PPU) fetchLowTileByte() {
 	table := ppu.flagBackgroundTable
 	tile := ppu.nameTableByte
 	address := 0x1000*uint16(table) + uint16(tile)*16 + fineY
-	ppu.lowTileByte = ppu.Read(address)
+	ppu.lowTileByte = readPPU(ppu.console, address)
 }
 
 func (ppu *PPU) fetchHighTileByte() {
@@ -289,7 +268,7 @@ func (ppu *PPU) fetchHighTileByte() {
 	table := ppu.flagBackgroundTable
 	tile := ppu.nameTableByte
 	address := 0x1000*uint16(table) + uint16(tile)*16 + fineY
-	ppu.highTileByte = ppu.Read(address + 8)
+	ppu.highTileByte = readPPU(ppu.console, address + 8)
 }
 
 func (ppu *PPU) storeTileData() {
@@ -394,8 +373,8 @@ func (ppu *PPU) fetchSpritePattern(i, row int) uint32 {
 		address = 0x1000*uint16(table) + uint16(tile)*16 + uint16(row)
 	}
 	a := (attributes & 3) << 2
-	lowTileByte := ppu.Read(address)
-	highTileByte := ppu.Read(address + 8)
+	lowTileByte := readPPU(ppu.console, address)
+	highTileByte := readPPU(ppu.console, address + 8)
 	var data uint32
 	for i := 0; i < 8; i++ {
 		var p1, p2 byte

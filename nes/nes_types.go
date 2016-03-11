@@ -5,15 +5,6 @@ import (
     "image"
 )
 
-type Memory interface {
-    Read(address uint16) byte
-    Write(address uint16, value byte)
-}
-
-type ppuMemory struct {
-    console *Console
-}
-
 type APU struct {
     console     *Console
     channel     chan float32
@@ -155,7 +146,6 @@ type CPU struct {
 }
 
 type PPU struct {
-    Memory           // memory interface
     console *Console // reference to parent object
 
     Cycle    int    // 0-340

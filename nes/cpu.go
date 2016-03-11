@@ -3,9 +3,9 @@ package nes
 // Reset resets the CPU to its initial powerup state
 func Reset(console *Console) {
 	cpu := console.CPU
-	cpu.PC = Read16(console, 0xFFFC)
+	cpu.PC = read16(console, 0xFFFC)
 	cpu.SP = 0xFD
-	SetFlags(cpu, 0x24)
+	setFlags(cpu, 0x24)
 }
 
 // pagesDiffer returns true if the two addresses reference different pages
@@ -32,8 +32,8 @@ func compare(cpu *CPU, a, b byte) {
 	}
 }
 
-// Read16 reads two bytes using Read to return a double-word value
-func Read16(console *Console, address uint16) uint16 {
+// read16 reads two bytes using Read to return a double-word value
+func read16(console *Console, address uint16) uint16 {
 	lo := uint16(ReadByte(console, address))
 	hi := uint16(ReadByte(console, address + 1))
 	return hi<<8 | lo
@@ -78,8 +78,8 @@ func pull16(console *Console) uint16 {
 	return hi<<8 | lo
 }
 
-// SetFlags sets the processor status flags
-func SetFlags(cpu *CPU, flags byte) {
+// sets the processor status flags
+func setFlags(cpu *CPU, flags byte) {
 	cpu.C = (flags >> 0) & 1
 	cpu.Z = (flags >> 1) & 1
 	cpu.I = (flags >> 2) & 1
@@ -112,35 +112,6 @@ func setN(cpu *CPU, value byte) {
 func setZN(cpu *CPU, value byte) {
 	setZ(cpu, value)
 	setN(cpu, value)
-}
-
-// triggerIRQ causes an IRQ interrupt to occur on the next cycle
-func triggerIRQ(cpu *CPU) {
-	if cpu.I == 0 {
-		cpu.interrupt = interruptIRQ
-	}
-}
-
-// Step executes a single CPU instruction
-
-// NMI - Non-Maskable Interrupt
-func nmi(console *Console) {
-	cpu := console.CPU
-	push16(console, cpu.PC)
-	php(console, 0, 0, 0)
-	cpu.PC = Read16(console, 0xFFFA)
-	cpu.I = 1
-	cpu.Cycles += 7
-}
-
-// IRQ - IRQ Interrupt
-func irq(console *Console) {
-	cpu := console.CPU
-	push16(console, cpu.PC)
-	php(console, 0, 0, 0)
-	cpu.PC = Read16(console, 0xFFFE)
-	cpu.I = 1
-	cpu.Cycles += 7
 }
 
 
@@ -258,7 +229,7 @@ func brk(console *Console, address uint16, pc uint16, mode byte) {
 	push16(console, cpu.PC)
 	php(console, address, pc, mode)
 	sei(console, address, pc, mode)
-	cpu.PC = Read16(console, 0xFFFE)
+	cpu.PC = read16(console, 0xFFFE)
 }
 
 // BVC - Branch if Overflow Clear
@@ -467,7 +438,7 @@ func pla(console *Console, address uint16, pc uint16, mode byte) {
 // PLP - Pull Processor Status
 func plp(console *Console, address uint16, pc uint16, mode byte) {
 	cpu := console.CPU
-	SetFlags(cpu, pull(console)&0xEF | 0x20)
+	setFlags(cpu, pull(console)&0xEF | 0x20)
 }
 
 // ROL - Rotate Left
@@ -509,7 +480,7 @@ func ror(console *Console, address uint16, pc uint16, mode byte) {
 // RTI - Return from Interrupt
 func rti(console *Console, address uint16, pc uint16, mode byte) {
 	cpu := console.CPU
-	SetFlags(cpu, pull(console)&0xEF | 0x20)
+	setFlags(cpu, pull(console)&0xEF | 0x20)
 	cpu.PC = pull16(console)
 }
 

@@ -124,7 +124,7 @@ func NewConsole(path string) (*Console, error) {
 	console.APU = &apu
 
 	ppu := PPU{
-		Memory: &ppuMemory{&console}, console: &console, 
+		console: &console, 
 		front: image.NewRGBA(image.Rect(0, 0, 256, 240)), 
 		back: image.NewRGBA(image.Rect(0, 0, 256, 240)),
 		Cycle: 340,
@@ -154,9 +154,20 @@ func StepSeconds(console *Console, seconds float64) {
 
 				switch cpu.interrupt {
 				case interruptNMI:
-					nmi(console)
+					// non-maskable interrupt
+					cpu := console.CPU
+					push16(console, cpu.PC)
+					php(console, 0, 0, 0)
+					cpu.PC = read16(console, 0xFFFA)
+					cpu.I = 1
+					cpu.Cycles += 7
 				case interruptIRQ:
-					irq(console)
+					cpu := console.CPU
+					push16(console, cpu.PC)
+					php(console, 0, 0, 0)
+					cpu.PC = read16(console, 0xFFFE)
+					cpu.I = 1
+					cpu.Cycles += 7
 				}
 				cpu.interrupt = interruptNone
 
@@ -167,12 +178,12 @@ func StepSeconds(console *Console, seconds float64) {
 				var pageCrossed bool
 				switch mode {
 				case modeAbsolute:
-					address = Read16(console, cpu.PC + 1)
+					address = read16(console, cpu.PC + 1)
 				case modeAbsoluteX:
-					address = Read16(console, cpu.PC+1) + uint16(cpu.X)
+					address = read16(console, cpu.PC+1) + uint16(cpu.X)
 					pageCrossed = pagesDiffer(address-uint16(cpu.X), address)
 				case modeAbsoluteY:
-					address = Read16(console, cpu.PC+1) + uint16(cpu.Y)
+					address = read16(console, cpu.PC+1) + uint16(cpu.Y)
 					pageCrossed = pagesDiffer(address-uint16(cpu.Y), address)
 				case modeAccumulator:
 					address = 0
@@ -183,7 +194,7 @@ func StepSeconds(console *Console, seconds float64) {
 				case modeIndexedIndirect:
 					address = read16bug(console, uint16(ReadByte(console, cpu.PC+1) + cpu.X))
 				case modeIndirect:
-					address = read16bug(console, Read16(console, cpu.PC + 1))
+					address = read16bug(console, read16(console, cpu.PC + 1))
 				case modeIndirectIndexed:
 					address = read16bug(console, uint16(ReadByte(console, cpu.PC+1))) + uint16(cpu.Y)
 					pageCrossed = pagesDiffer(address-uint16(cpu.Y), address)
@@ -210,6 +221,13 @@ func StepSeconds(console *Console, seconds float64) {
 				instruction.Function(console, address, cpu.PC, mode)
 
 				cpuCycles = int(cpu.Cycles - cycles)
+			}
+		}
+
+		// triggerIRQ causes an IRQ interrupt to occur on the next cycle
+		triggerIRQ := func (cpu *CPU) {
+			if cpu.I == 0 {
+				cpu.interrupt = interruptIRQ
 			}
 		}
 
