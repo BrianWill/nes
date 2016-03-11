@@ -18,9 +18,9 @@ func ReadByte(console *Console, address uint16) byte {
 	case address < 0x2000:
 		return console.RAM[address%0x0800]
 	case address < 0x4000:
-		return console.PPU.readRegister(0x2000 + address%8)
+		return readPPURegister(console, 0x2000 + address%8)
 	case address == 0x4014:
-		return console.PPU.readRegister(address)
+		return readPPURegister(console, address)
 	case address == 0x4015:
 		// apu read register
 		apu := console.APU
@@ -52,7 +52,7 @@ func ReadByte(console *Console, address uint16) byte {
 	case address < 0x6000:
 		// TODO: I/O registers
 	case address >= 0x6000:
-		return readMapper(console.Mapper, address)
+		return readMapper(console.Mapper, console.Cartridge, address)
 	default:
 		log.Fatalf("unhandled cpu memory read at address: 0x%04X", address)
 	}
@@ -188,25 +188,73 @@ func WriteByte(console *Console, address uint16, value byte) {
 		}
 	}
 
-	writeRegisterPPU := func (ppu *PPU, address uint16, value byte) {
+	writeRegisterPPU := func (console *Console, address uint16, value byte) {
+		ppu := console.PPU
 		ppu.register = value
 		switch address {
 		case 0x2000:
-			ppu.writeControl(value)
+			writeControlPPU(ppu, value)
 		case 0x2001:
-			ppu.writeMask(value)
+			writeMaskPPU(ppu, value)
 		case 0x2003:
-			ppu.writeOAMAddress(value)
+			ppu.oamAddress = value
 		case 0x2004:
-			ppu.writeOAMData(value)
+			// write OAM data
+			ppu.oamData[ppu.oamAddress] = value
+			ppu.oamAddress++
 		case 0x2005:
-			ppu.writeScroll(value)
+			// write scroll
+			if ppu.w == 0 {
+				// t: ........ ...HGFED = d: HGFED...
+				// x:               CBA = d: .....CBA
+				// w:                   = 1
+				ppu.t = (ppu.t & 0xFFE0) | (uint16(value) >> 3)
+				ppu.x = value & 0x07
+				ppu.w = 1
+			} else {
+				// t: .CBA..HG FED..... = d: HGFEDCBA
+				// w:                   = 0
+				ppu.t = (ppu.t & 0x8FFF) | ((uint16(value) & 0x07) << 12)
+				ppu.t = (ppu.t & 0xFC1F) | ((uint16(value) & 0xF8) << 2)
+				ppu.w = 0
+			}
 		case 0x2006:
-			ppu.writeAddress(value)
+			// write address
+			if ppu.w == 0 {
+				// t: ..FEDCBA ........ = d: ..FEDCBA
+				// t: .X...... ........ = 0
+				// w:                   = 1
+				ppu.t = (ppu.t & 0x80FF) | ((uint16(value) & 0x3F) << 8)
+				ppu.w = 1
+			} else {
+				// t: ........ HGFEDCBA = d: HGFEDCBA
+				// v                    = t
+				// w:                   = 0
+				ppu.t = (ppu.t & 0xFF00) | uint16(value)
+				ppu.v = ppu.t
+				ppu.w = 0
+			}
 		case 0x2007:
-			ppu.writeData(value)
+			// write data
+			writePPU(console, ppu.v, value)
+			if ppu.flagIncrement == 0 {
+				ppu.v += 1
+			} else {
+				ppu.v += 32
+			}
 		case 0x4014:
-			ppu.writeDMA(value)
+			// write DMA
+			cpu := console.CPU
+			address := uint16(value) << 8
+			for i := 0; i < 256; i++ {
+				ppu.oamData[ppu.oamAddress] = ReadByte(console, address)
+				ppu.oamAddress++
+				address++
+			}
+			cpu.stall += 513
+			if cpu.Cycles%2 == 1 {
+				cpu.stall++
+			}
 		}
 	}
 
@@ -214,11 +262,11 @@ func WriteByte(console *Console, address uint16, value byte) {
 	case address < 0x2000:
 		console.RAM[address%0x0800] = value
 	case address < 0x4000:
-		writeRegisterPPU(console.PPU, 0x2000+address%8, value)
+		writeRegisterPPU(console, 0x2000+address%8, value)
 	case address < 0x4014:
 		writeRegisterAPU(console.APU, address, value)
 	case address == 0x4014:
-		writeRegisterPPU(console.PPU, address, value)
+		writeRegisterPPU(console, address, value)
 	case address == 0x4015:
 		writeRegisterAPU(console.APU, address, value)
 	case address == 0x4016:
@@ -229,7 +277,7 @@ func WriteByte(console *Console, address uint16, value byte) {
 	case address < 0x6000:
 		// TODO: I/O registers
 	case address >= 0x6000:
-		writeMapper(console.Mapper, address, value)
+		writeMapper(console.Mapper, console.Cartridge, address, value)
 	default:
 		log.Fatalf("unhandled cpu memory write at address: 0x%04X", address)
 	}
@@ -239,12 +287,12 @@ func readPPU(console *Console, address uint16) byte {
 	address = address % 0x4000
 	switch {
 	case address < 0x2000:
-		return readMapper(console.Mapper, address)
+		return readMapper(console.Mapper, console.Cartridge, address)
 	case address < 0x3F00:
 		mode := console.Cartridge.Mirror
 		return console.PPU.nameTableData[mirrorAddress(mode, address)%2048]
 	case address < 0x4000:
-		return console.PPU.readPalette(address % 32)
+		return readPalette(console.PPU, address % 32)
 	default:
 		log.Fatalf("unhandled ppu memory read at address: 0x%04X", address)
 	}
@@ -255,49 +303,54 @@ func writePPU(console *Console, address uint16, value byte) {
 	address = address % 0x4000
 	switch {
 	case address < 0x2000:
-		writeMapper(console.Mapper, address, value)
+		writeMapper(console.Mapper, console.Cartridge, address, value)
 	case address < 0x3F00:
 		mode := console.Cartridge.Mirror
 		console.PPU.nameTableData[mirrorAddress(mode, address)%2048] = value
 	case address < 0x4000:
-		console.PPU.writePalette(address%32, value)
+		// write palette
+		address := address%32
+		if address >= 16 && address%4 == 0 {
+			address -= 16
+		}
+		console.PPU.paletteData[address] = value
 	default:
 		log.Fatalf("unhandled ppu memory write at address: 0x%04X", address)
 	}
 }
 
 
-func readMapper(mapper Mapper, address uint16) byte {
+func readMapper(mapper Mapper, cartridge *Cartridge, address uint16) byte {
 	switch m := mapper.(type) {
 	case *Mapper1:
 		switch {
 		case address < 0x2000:
 			bank := address / 0x1000
 			offset := address % 0x1000
-			return m.CHR[m.chrOffsets[bank]+int(offset)]
+			return cartridge.CHR[m.chrOffsets[bank]+int(offset)]
 		case address >= 0x8000:
 			address = address - 0x8000
 			bank := address / 0x4000
 			offset := address % 0x4000
-			return m.PRG[m.prgOffsets[bank]+int(offset)]
+			return cartridge.PRG[m.prgOffsets[bank]+int(offset)]
 		case address >= 0x6000:
-			return m.SRAM[int(address)-0x6000]
+			return cartridge.SRAM[int(address)-0x6000]
 		default:
 			log.Fatalf("unhandled mapper1 read at address: 0x%04X", address)
 		}
 	case *Mapper2:
 		switch {
 		case address < 0x2000:
-			return m.CHR[address]
+			return cartridge.CHR[address]
 		case address >= 0xC000:
 			index := m.prgBank2*0x4000 + int(address-0xC000)
-			return m.PRG[index]
+			return cartridge.PRG[index]
 		case address >= 0x8000:
 			index := m.prgBank1*0x4000 + int(address-0x8000)
-			return m.PRG[index]
+			return cartridge.PRG[index]
 		case address >= 0x6000:
 			index := int(address) - 0x6000
-			return m.SRAM[index]
+			return cartridge.SRAM[index]
 		default:
 			log.Fatalf("unhandled mapper2 read at address: 0x%04X", address)
 		}
@@ -305,16 +358,16 @@ func readMapper(mapper Mapper, address uint16) byte {
 		switch {
 		case address < 0x2000:
 			index := m.chrBank*0x2000 + int(address)
-			return m.CHR[index]
+			return cartridge.CHR[index]
 		case address >= 0xC000:
 			index := m.prgBank2*0x4000 + int(address-0xC000)
-			return m.PRG[index]
+			return cartridge.PRG[index]
 		case address >= 0x8000:
 			index := m.prgBank1*0x4000 + int(address-0x8000)
-			return m.PRG[index]
+			return cartridge.PRG[index]
 		case address >= 0x6000:
 			index := int(address) - 0x6000
-			return m.SRAM[index]
+			return cartridge.SRAM[index]
 		default:
 			log.Fatalf("unhandled mapper3 read at address: 0x%04X", address)
 		}
@@ -323,27 +376,27 @@ func readMapper(mapper Mapper, address uint16) byte {
 		case address < 0x2000:
 			bank := address / 0x0400
 			offset := address % 0x0400
-			return m.CHR[m.chrOffsets[bank]+int(offset)]
+			return cartridge.CHR[m.chrOffsets[bank]+int(offset)]
 		case address >= 0x8000:
 			address = address - 0x8000
 			bank := address / 0x2000
 			offset := address % 0x2000
-			return m.PRG[m.prgOffsets[bank]+int(offset)]
+			return cartridge.PRG[m.prgOffsets[bank]+int(offset)]
 		case address >= 0x6000:
-			return m.SRAM[int(address)-0x6000]
+			return cartridge.SRAM[int(address)-0x6000]
 		default:
 			log.Fatalf("unhandled mapper4 read at address: 0x%04X", address)
 		}
 	case *Mapper7:
 		switch {
 		case address < 0x2000:
-			return m.CHR[address]
+			return cartridge.CHR[address]
 		case address >= 0x8000:
 			index := m.prgBank*0x8000 + int(address-0x8000)
-			return m.PRG[index]
+			return cartridge.PRG[index]
 		case address >= 0x6000:
 			index := int(address) - 0x6000
-			return m.SRAM[index]
+			return cartridge.SRAM[index]
 		default:
 			log.Fatalf("unhandled mapper7 read at address: 0x%04X", address)
 		}
@@ -353,14 +406,14 @@ func readMapper(mapper Mapper, address uint16) byte {
 
 
 
-func writeMapper(mapper Mapper, address uint16, value byte) {
+func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte) {
 	switch m := mapper.(type) {
 	case *Mapper1:
 		switch {
 		case address < 0x2000:
 			bank := address / 0x1000
 			offset := address % 0x1000
-			m.CHR[m.chrOffsets[bank]+int(offset)] = value
+			cartridge.CHR[m.chrOffsets[bank]+int(offset)] = value
 		case address >= 0x8000:
 			// PRG ROM bank mode (0, 1: switch 32 KB at $8000, ignoring low bit of bank number;
 			//                    2: fix first bank at $8000 and switch 16 KB bank at $C000;
@@ -369,24 +422,24 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 			updateOffsets1 := func (m *Mapper1) {
 				switch m.prgMode {
 				case 0, 1:
-					m.prgOffsets[0] = prgBankOffset1(m, int(m.prgBank & 0xFE))
-					m.prgOffsets[1] = prgBankOffset1(m, int(m.prgBank | 0x01))
+					m.prgOffsets[0] = prgBankOffset1(cartridge, int(m.prgBank & 0xFE))
+					m.prgOffsets[1] = prgBankOffset1(cartridge, int(m.prgBank | 0x01))
 				case 2:
 					m.prgOffsets[0] = 0
-					m.prgOffsets[1] = prgBankOffset1(m, int(m.prgBank))
+					m.prgOffsets[1] = prgBankOffset1(cartridge, int(m.prgBank))
 				case 3:
-					m.prgOffsets[0] = prgBankOffset1(m, int(m.prgBank))
-					m.prgOffsets[1] = prgBankOffset1(m, -1)
+					m.prgOffsets[0] = prgBankOffset1(cartridge, int(m.prgBank))
+					m.prgOffsets[1] = prgBankOffset1(cartridge, -1)
 				}
 
 				chrBankOffset1 := func (m *Mapper1, index int) int {
 					if index >= 0x80 {
 						index -= 0x100
 					}
-					index %= len(m.CHR) / 0x1000
+					index %= len(cartridge.CHR) / 0x1000
 					offset := index * 0x1000
 					if offset < 0 {
-						offset += len(m.CHR)
+						offset += len(cartridge.CHR)
 					}
 					return offset
 				}
@@ -409,13 +462,13 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 				mirror := value & 3
 				switch mirror {
 				case 0:
-					m.Cartridge.Mirror = MirrorSingle0
+					cartridge.Mirror = MirrorSingle0
 				case 1:
-					m.Cartridge.Mirror = MirrorSingle1
+					cartridge.Mirror = MirrorSingle1
 				case 2:
-					m.Cartridge.Mirror = MirrorVertical
+					cartridge.Mirror = MirrorVertical
 				case 3:
-					m.Cartridge.Mirror = MirrorHorizontal
+					cartridge.Mirror = MirrorHorizontal
 				}
 			}
 
@@ -443,19 +496,19 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 				}
 			}
 		case address >= 0x6000:
-			m.SRAM[int(address)-0x6000] = value
+			cartridge.SRAM[int(address)-0x6000] = value
 		default:
 			log.Fatalf("unhandled mapper1 write at address: 0x%04X", address)
 		}
 	case *Mapper2:
 		switch {
 		case address < 0x2000:
-			m.CHR[address] = value
+			cartridge.CHR[address] = value
 		case address >= 0x8000:
 			m.prgBank1 = int(value) % m.prgBanks
 		case address >= 0x6000:
 			index := int(address) - 0x6000
-			m.SRAM[index] = value
+			cartridge.SRAM[index] = value
 		default:
 			log.Fatalf("unhandled mapper2 write at address: 0x%04X", address)
 		}
@@ -463,12 +516,12 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 		switch {
 		case address < 0x2000:
 			index := m.chrBank*0x2000 + int(address)
-			m.CHR[index] = value
+			cartridge.CHR[index] = value
 		case address >= 0x8000:
 			m.chrBank = int(value & 3)
 		case address >= 0x6000:
 			index := int(address) - 0x6000
-			m.SRAM[index] = value
+			cartridge.SRAM[index] = value
 		default:
 			log.Fatalf("unhandled mapper3 write at address: 0x%04X", address)
 		}
@@ -477,30 +530,30 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 		case address < 0x2000:
 			bank := address / 0x0400
 			offset := address % 0x0400
-			m.CHR[m.chrOffsets[bank]+int(offset)] = value
+			cartridge.CHR[m.chrOffsets[bank]+int(offset)] = value
 		case address >= 0x8000:
 			updateOffsets4 := func (m *Mapper4) {
 				switch m.prgMode {
 				case 0:
-					m.prgOffsets[0] = prgBankOffset4(m, int(m.registers[6]))
-					m.prgOffsets[1] = prgBankOffset4(m, int(m.registers[7]))
-					m.prgOffsets[2] = prgBankOffset4(m, -2)
-					m.prgOffsets[3] = prgBankOffset4(m, -1)
+					m.prgOffsets[0] = prgBankOffset4(cartridge, int(m.registers[6]))
+					m.prgOffsets[1] = prgBankOffset4(cartridge, int(m.registers[7]))
+					m.prgOffsets[2] = prgBankOffset4(cartridge, -2)
+					m.prgOffsets[3] = prgBankOffset4(cartridge, -1)
 				case 1:
-					m.prgOffsets[0] = prgBankOffset4(m, -2)
-					m.prgOffsets[1] = prgBankOffset4(m, int(m.registers[7]))
-					m.prgOffsets[2] = prgBankOffset4(m, int(m.registers[6]))
-					m.prgOffsets[3] = prgBankOffset4(m, -1)
+					m.prgOffsets[0] = prgBankOffset4(cartridge, -2)
+					m.prgOffsets[1] = prgBankOffset4(cartridge, int(m.registers[7]))
+					m.prgOffsets[2] = prgBankOffset4(cartridge, int(m.registers[6]))
+					m.prgOffsets[3] = prgBankOffset4(cartridge, -1)
 				}
 
 				chrBankOffset4 := func (m *Mapper4, index int) int {
 					if index >= 0x80 {
 						index -= 0x100
 					}
-					index %= len(m.CHR) / 0x0400
+					index %= len(cartridge.CHR) / 0x0400
 					offset := index * 0x0400
 					if offset < 0 {
-						offset += len(m.CHR)
+						offset += len(cartridge.CHR)
 					}
 					return offset
 				}
@@ -542,9 +595,9 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 				// write mirror
 				switch value & 1 {
 				case 0:
-					m.Cartridge.Mirror = MirrorVertical
+					cartridge.Mirror = MirrorVertical
 				case 1:
-					m.Cartridge.Mirror = MirrorHorizontal
+					cartridge.Mirror = MirrorHorizontal
 				}
 			case address <= 0xBFFF && address%2 == 1:
 				// btw: think this was stubbed for something never implemented. anything important?
@@ -562,25 +615,25 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 				m.irqEnable = true
 			}
 		case address >= 0x6000:
-			m.SRAM[int(address)-0x6000] = value
+			cartridge.SRAM[int(address)-0x6000] = value
 		default:
 			log.Fatalf("unhandled mapper4 write at address: 0x%04X", address)
 		}
 	case *Mapper7:
 		switch {
 		case address < 0x2000:
-			m.CHR[address] = value
+			cartridge.CHR[address] = value
 		case address >= 0x8000:
 			m.prgBank = int(value & 7)
 			switch value & 0x10 {
 			case 0x00:
-				m.Cartridge.Mirror = MirrorSingle0
+				cartridge.Mirror = MirrorSingle0
 			case 0x10:
-				m.Cartridge.Mirror = MirrorSingle1
+				cartridge.Mirror = MirrorSingle1
 			}
 		case address >= 0x6000:
 			index := int(address) - 0x6000
-			m.SRAM[index] = value
+			cartridge.SRAM[index] = value
 		default:
 			log.Fatalf("unhandled mapper7 write at address: 0x%04X", address)
 		}
@@ -588,27 +641,27 @@ func writeMapper(mapper Mapper, address uint16, value byte) {
 }
 
 
-func prgBankOffset1(m *Mapper1, index int) int {
+func prgBankOffset1(c *Cartridge, index int) int {
 	if index >= 0x80 {
 		index -= 0x100
 	}
-	index %= len(m.PRG) / 0x4000
+	index %= len(c.PRG) / 0x4000
 	offset := index * 0x4000
 	if offset < 0 {
-		offset += len(m.PRG)
+		offset += len(c.PRG)
 	}
 	return offset
 }
 
 
-func prgBankOffset4(m *Mapper4, index int) int {
+func prgBankOffset4(c *Cartridge, index int) int {
 	if index >= 0x80 {
 		index -= 0x100
 	}
-	index %= len(m.PRG) / 0x2000
+	index %= len(c.PRG) / 0x2000
 	offset := index * 0x2000
 	if offset < 0 {
-		offset += len(m.PRG)
+		offset += len(c.PRG)
 	}
 	return offset
 }
@@ -620,3 +673,79 @@ func mirrorAddress(mode byte, address uint16) uint16 {
 	offset := address % 0x0400
 	return 0x2000 + MirrorLookup[mode][table]*0x0400 + offset
 }
+
+
+func readPalette(ppu *PPU, address uint16) byte {
+	if address >= 16 && address%4 == 0 {
+		address -= 16
+	}
+	return ppu.paletteData[address]
+}
+
+
+func readPPURegister(console *Console, address uint16) byte {
+	ppu := console.PPU
+	switch address {
+	case 0x2002: // PPUSTATUS
+		// read status
+		status := ppu.register & 0x1F
+		status |= ppu.flagSpriteOverflow << 5
+		status |= ppu.flagSpriteZeroHit << 6
+		if ppu.nmiOccurred {
+			status |= 1 << 7
+		}
+		ppu.nmiOccurred = false
+		nmiChangePPU(ppu)
+		ppu.w = 0
+		return status
+	case 0x2004:
+		// OAM = Object Attribute Memory
+		return ppu.oamData[ppu.oamAddress]
+	case 0x2007:
+		// read data
+		value := readPPU(console, ppu.v)
+		// emulate buffered reads
+		if ppu.v%0x4000 < 0x3F00 {
+			buffered := ppu.bufferedData
+			ppu.bufferedData = value
+			value = buffered
+		} else {
+			ppu.bufferedData = readPPU(console, ppu.v - 0x1000)
+		}
+		// increment address
+		if ppu.flagIncrement == 0 {
+			ppu.v += 1
+		} else {
+			ppu.v += 32
+		}
+		return value
+	}
+	return 0
+}
+
+// $2000: PPUCTRL
+func writeControlPPU(ppu *PPU, value byte) {
+	ppu.flagNameTable = (value >> 0) & 3
+	ppu.flagIncrement = (value >> 2) & 1
+	ppu.flagSpriteTable = (value >> 3) & 1
+	ppu.flagBackgroundTable = (value >> 4) & 1
+	ppu.flagSpriteSize = (value >> 5) & 1
+	ppu.flagMasterSlave = (value >> 6) & 1
+	ppu.nmiOutput = (value>>7)&1 == 1
+	nmiChangePPU(ppu)
+	// t: ....BA.. ........ = d: ......BA
+	ppu.t = (ppu.t & 0xF3FF) | ((uint16(value) & 0x03) << 10)
+}
+
+// $2001: PPUMASK
+func writeMaskPPU(ppu *PPU, value byte) {
+	ppu.flagGrayscale = (value >> 0) & 1
+	ppu.flagShowLeftBackground = (value >> 1) & 1
+	ppu.flagShowLeftSprites = (value >> 2) & 1
+	ppu.flagShowBackground = (value >> 3) & 1
+	ppu.flagShowSprites = (value >> 4) & 1
+	ppu.flagRedTint = (value >> 5) & 1
+	ppu.flagGreenTint = (value >> 6) & 1
+	ppu.flagBlueTint = (value >> 7) & 1
+}
+
