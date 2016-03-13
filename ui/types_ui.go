@@ -22,7 +22,7 @@ type Director struct {
 	window *glfw.Window
 	audio *Audio
 	view View
-	menuView View
+	menuView MenuView
 	timestamp float64
 }
 

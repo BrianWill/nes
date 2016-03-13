@@ -13,6 +13,8 @@ import (
 	"path"
 	"strings"
 
+	//"fmt"
+
 	"github.com/BrianWill/nes/nes"
 	"github.com/go-gl/gl/v2.1/gl"
 	"github.com/go-gl/glfw/v3.1/glfw"
@@ -351,7 +353,7 @@ func Run(paths []string) {
 	// run director
 	d := &Director{window: window, audio: audio}
 	{
-		menuView := &MenuView{paths: paths}	
+		d.menuView = MenuView{paths: paths}	
 		texture := createTexture()
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(
@@ -359,14 +361,13 @@ func Run(paths []string) {
 			textureSize, textureSize,
 			0, gl.RGBA, gl.UNSIGNED_BYTE, nil)
 		gl.BindTexture(gl.TEXTURE_2D, 0)
-		menuView.texture = &Texture{texture: texture, lookup: make(map[string]int), ch: make(chan string, 1024)}
-		d.menuView = menuView
+		d.menuView.texture = &Texture{texture: texture, lookup: make(map[string]int), ch: make(chan string, 1024)}
 	}
 
 	if len(paths) == 1 {
 		playGame(d, paths[0])
 	} else {
-		setView(d, d.menuView)
+		setView(d, &d.menuView)
 	}
 	// main loop
 	for !d.window.ShouldClose() {
@@ -380,11 +381,16 @@ func Run(paths []string) {
 				if dt > 1 {
 					dt = 0
 				}
+
+				// check esc to menu
 				if joystickReset(glfw.Joystick1) || joystickReset(glfw.Joystick2) || readKey(d.window, glfw.KeyEscape) {
-					setView(d, d.menuView)
+					setView(d, &d.menuView)
 				}
+
 				// update controllers
 				{
+					// turbo true for 3 frames, false for 3 frames, ad infinitum
+					// Approximates player repressing the button every 6 frames.
 					turbo := v.console.PPU.Frame%6 < 3
 					k1 := readKeys(d.window, turbo)
 					j1 := readJoystick(glfw.Joystick1, turbo)
@@ -393,6 +399,7 @@ func Run(paths []string) {
 					nes.SetButtons2(v.console, j2)
 				}
 				nes.StepSeconds(v.console, dt)
+
 				gl.BindTexture(gl.TEXTURE_2D, v.texture)
 				setTexture(nes.Buffer(v.console))
 				// draw buffer
@@ -420,7 +427,7 @@ func Run(paths []string) {
 					gl.Vertex2f(-x, y)
 					gl.End()
 				}
-				gl.BindTexture(gl.TEXTURE_2D, 0)
+				gl.BindTexture(gl.TEXTURE_2D, 0)  // btw: not sure this serves any purpose?
 				if v.record {
 					v.frames = append(v.frames, copyImage(nes.Buffer(v.console)))
 				}
@@ -512,6 +519,7 @@ func Run(paths []string) {
 					}
 					clampScroll(v, true)
 				}
+				// btw: why pushMatrix and Ortho for the menu but not gameView?
 				gl.PushMatrix()
 				gl.Ortho(0, float64(w), float64(h), 0, -1, 1)
 				gl.BindTexture(gl.TEXTURE_2D, v.texture.texture)

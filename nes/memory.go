@@ -2,7 +2,7 @@ package nes
 
 import "log"
 
-func ReadByte(console *Console, address uint16) byte {
+func readByte(console *Console, address uint16) byte {
 	readController := func (c *Controller) byte {
 		value := byte(0)
 		if c.index < 8 && c.buttons[c.index] {
@@ -59,7 +59,7 @@ func ReadByte(console *Console, address uint16) byte {
 	return 0
 }
 
-func WriteByte(console *Console, address uint16, value byte) {
+func writeByte(console *Console, address uint16, value byte) {
 	writeController := func (c *Controller, value byte) {
 		c.strobe = value
 		if c.strobe&1 == 1 {
@@ -247,7 +247,7 @@ func WriteByte(console *Console, address uint16, value byte) {
 			cpu := console.CPU
 			address := uint16(value) << 8
 			for i := 0; i < 256; i++ {
-				ppu.oamData[ppu.oamAddress] = ReadByte(console, address)
+				ppu.oamData[ppu.oamAddress] = readByte(console, address)
 				ppu.oamAddress++
 				address++
 			}

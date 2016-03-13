@@ -24,25 +24,25 @@ func executeInstruction(console *Console, opcode byte) {
     case modeImplied:
         address = 0
     case modeIndexedIndirect:
-        address = read16bug(console, uint16(ReadByte(console, cpu.PC+1) + cpu.X))
+        address = read16bug(console, uint16(readByte(console, cpu.PC+1) + cpu.X))
     case modeIndirect:
         address = read16bug(console, read16(console, cpu.PC + 1))
     case modeIndirectIndexed:
-        address = read16bug(console, uint16(ReadByte(console, cpu.PC+1))) + uint16(cpu.Y)
+        address = read16bug(console, uint16(readByte(console, cpu.PC+1))) + uint16(cpu.Y)
         pageCrossed = pagesDiffer(address-uint16(cpu.Y), address)
     case modeRelative:
-        offset := uint16(ReadByte(console, cpu.PC + 1))
+        offset := uint16(readByte(console, cpu.PC + 1))
         if offset < 0x80 {
             address = cpu.PC + 2 + offset
         } else {
             address = cpu.PC + 2 + offset - 0x100
         }
     case modeZeroPage:
-        address = uint16(ReadByte(console, cpu.PC + 1))
+        address = uint16(readByte(console, cpu.PC + 1))
     case modeZeroPageX:
-        address = uint16(ReadByte(console, cpu.PC+1) + cpu.X)
+        address = uint16(readByte(console, cpu.PC+1) + cpu.X)
     case modeZeroPageY:
-        address = uint16(ReadByte(console, cpu.PC+1) + cpu.Y)
+        address = uint16(readByte(console, cpu.PC+1) + cpu.Y)
     }
 
     cpu.PC += uint16(instruction.Size)
@@ -59,7 +59,7 @@ func executeInstruction(console *Console, opcode byte) {
     // ADC - Add with Carry
     adc := func () {
         a := cpu.A
-        b := ReadByte(console, address)
+        b := readByte(console, address)
         c := cpu.C
         cpu.A = a + b + c
         setZN(cpu, cpu.A)
@@ -77,7 +77,7 @@ func executeInstruction(console *Console, opcode byte) {
 
     // AND - Logical AND
     and := func () {
-        cpu.A = cpu.A & ReadByte(console, address)
+        cpu.A = cpu.A & readByte(console, address)
         setZN(cpu, cpu.A)
     }
 
@@ -88,17 +88,17 @@ func executeInstruction(console *Console, opcode byte) {
             cpu.A <<= 1
             setZN(cpu, cpu.A)
         } else {
-            value := ReadByte(console, address)
+            value := readByte(console, address)
             cpu.C = (value >> 7) & 1
             value <<= 1
-            WriteByte(console, address, value)
+            writeByte(console, address, value)
             setZN(cpu, value)
         }
     }
 
     // BIT - Bit Test
     bit := func () {
-        value := ReadByte(console, address)
+        value := readByte(console, address)
         cpu.V = (value >> 6) & 1
         setZ(cpu, value & cpu.A)
         setN(cpu, value)
@@ -106,40 +106,40 @@ func executeInstruction(console *Console, opcode byte) {
 
     // CMP - Compare
     cmp := func () {
-        value := ReadByte(console, address)
+        value := readByte(console, address)
         compare(cpu, cpu.A, value)
     }
 
     // CPX - Compare X Register
     cpx := func () {
-        value := ReadByte(console, address)
+        value := readByte(console, address)
         compare(cpu, cpu.X, value)
     }
 
     // CPY - Compare Y Register
     cpy := func () {
-        value := ReadByte(console, address)
+        value := readByte(console, address)
         compare(cpu, cpu.Y, value)
     }
 
     // DEC - Decrement Memory
     dec := func () {
-        value := ReadByte(console, address) - 1
-        WriteByte(console, address, value)
+        value := readByte(console, address) - 1
+        writeByte(console, address, value)
         setZN(cpu, value)
     }
 
 
     // EOR - Exclusive OR
     eor := func () {
-        cpu.A = cpu.A ^ ReadByte(console, address)
+        cpu.A = cpu.A ^ readByte(console, address)
         setZN(cpu, cpu.A)
     }
 
     // INC - Increment Memory
     inc := func () {
-        value := ReadByte(console, address) + 1
-        WriteByte(console, address, value)
+        value := readByte(console, address) + 1
+        writeByte(console, address, value)
         setZN(cpu, value)
     }
 
@@ -150,19 +150,19 @@ func executeInstruction(console *Console, opcode byte) {
 
     // LDA - Load Accumulator
     lda := func () {
-        cpu.A = ReadByte(console, address)
+        cpu.A = readByte(console, address)
         setZN(cpu, cpu.A)
     }
 
     // LDX - Load X Register
     ldx := func () {
-        cpu.X = ReadByte(console, address)
+        cpu.X = readByte(console, address)
         setZN(cpu, cpu.X)
     }
 
     // LDY - Load Y Register
     ldy := func () {
-        cpu.Y = ReadByte(console, address)
+        cpu.Y = readByte(console, address)
         setZN(cpu, cpu.Y)
     }
 
@@ -173,10 +173,10 @@ func executeInstruction(console *Console, opcode byte) {
             cpu.A >>= 1
             setZN(cpu, cpu.A)
         } else {
-            value := ReadByte(console, address)
+            value := readByte(console, address)
             cpu.C = value & 1
             value >>= 1
-            WriteByte(console, address, value)
+            writeByte(console, address, value)
             setZN(cpu, value)
         }
     }
@@ -184,7 +184,7 @@ func executeInstruction(console *Console, opcode byte) {
 
     // ORA - Logical Inclusive OR
     ora := func () {
-        cpu.A = cpu.A | ReadByte(console, address)
+        cpu.A = cpu.A | readByte(console, address)
         setZN(cpu, cpu.A)
     }
 
@@ -213,10 +213,10 @@ func executeInstruction(console *Console, opcode byte) {
             setZN(cpu, cpu.A)
         } else {
             c := cpu.C
-            value := ReadByte(console, address)
+            value := readByte(console, address)
             cpu.C = (value >> 7) & 1
             value = (value << 1) | c
-            WriteByte(console, address, value)
+            writeByte(console, address, value)
             setZN(cpu, value)
         }
     }
@@ -230,10 +230,10 @@ func executeInstruction(console *Console, opcode byte) {
             setZN(cpu, cpu.A)
         } else {
             c := cpu.C
-            value := ReadByte(console, address)
+            value := readByte(console, address)
             cpu.C = value & 1
             value = (value >> 1) | (c << 7)
-            WriteByte(console, address, value)
+            writeByte(console, address, value)
             setZN(cpu, value)
         }
     }
@@ -242,7 +242,7 @@ func executeInstruction(console *Console, opcode byte) {
     // SBC - Subtract with Carry
     sbc := func () {
         a := cpu.A
-        b := ReadByte(console, address)
+        b := readByte(console, address)
         c := cpu.C
         cpu.A = a - b - (1 - c)
         setZN(cpu, cpu.A)
@@ -265,17 +265,17 @@ func executeInstruction(console *Console, opcode byte) {
 
     // STA - Store Accumulator
     sta := func () {
-        WriteByte(console, address, cpu.A)
+        writeByte(console, address, cpu.A)
     }
 
     // STX - Store X Register
     stx := func () {
-        WriteByte(console, address, cpu.X)
+        writeByte(console, address, cpu.X)
     }
 
     // STY - Store Y Register
     sty := func () {
-        WriteByte(console, address, cpu.Y)
+        writeByte(console, address, cpu.Y)
     }
 
 
@@ -797,15 +797,15 @@ func addBranchCycles(cpu *CPU, address uint16, pc uint16) {
 func read16bug(console *Console, address uint16) uint16 {
     a := address
     b := (a & 0xFF00) | uint16(byte(a)+1)
-    lo := ReadByte(console, a)
-    hi := ReadByte(console, b)
+    lo := readByte(console, a)
+    hi := readByte(console, b)
     return uint16(hi)<<8 | uint16(lo)
 }
 
 // read16 reads two bytes using Read to return a double-word value
 func read16(console *Console, address uint16) uint16 {
-    lo := uint16(ReadByte(console, address))
-    hi := uint16(ReadByte(console, address + 1))
+    lo := uint16(readByte(console, address))
+    hi := uint16(readByte(console, address + 1))
     return hi<<8 | lo
 }
 
@@ -818,7 +818,7 @@ func pagesDiffer(a, b uint16) bool {
 // push pushes a byte onto the stack
 func push(console *Console, value byte) {
     cpu := console.CPU
-    WriteByte(console, 0x100|uint16(cpu.SP), value)
+    writeByte(console, 0x100|uint16(cpu.SP), value)
     cpu.SP--
 }
 
@@ -826,7 +826,7 @@ func push(console *Console, value byte) {
 func pull(console *Console) byte {
     cpu := console.CPU
     cpu.SP++
-    return ReadByte(console, 0x100 | uint16(cpu.SP))
+    return readByte(console, 0x100 | uint16(cpu.SP))
 }
 
 // push16 pushes two bytes onto the stack

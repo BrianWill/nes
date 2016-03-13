@@ -175,7 +175,6 @@ func StepSeconds(console *Console, seconds float64) {
 		renderingEnabled := ppu.flagShowBackground != 0 || ppu.flagShowSprites != 0
 		preLine := ppu.ScanLine == 261
 		visibleLine := ppu.ScanLine < 240
-		// postLine := ppu.ScanLine == 240
 		renderLine := preLine || visibleLine
 		preFetchCycle := ppu.Cycle >= 321 && ppu.Cycle <= 336
 		visibleCycle := ppu.Cycle >= 1 && ppu.Cycle <= 256
@@ -547,7 +546,7 @@ func StepSeconds(console *Console, seconds float64) {
 					// step reader
 					if d.currentLength > 0 && d.bitCount == 0 {
 						console.CPU.stall += 4
-						d.shiftRegister = ReadByte(console, d.currentAddress)
+						d.shiftRegister = readByte(console, d.currentAddress)
 						d.bitCount = 8
 						d.currentAddress++
 						if d.currentAddress == 0 {
@@ -744,7 +743,7 @@ func StepSeconds(console *Console, seconds float64) {
 					cpu.Cycles += 7
 				}
 				cpu.interrupt = interruptNone
-				opcode := ReadByte(console, cpu.PC)
+				opcode := readByte(console, cpu.PC)
 				executeInstruction(console, opcode)
 				cpuCycles = int(cpu.Cycles - startCycles)
 			}
@@ -754,7 +753,6 @@ func StepSeconds(console *Console, seconds float64) {
 		for i := 0; i < ppuCycles; i++ {
 			stepPPU(console.PPU)
 
-			// btw: what's this about?
 			switch m := console.Mapper.(type) {
 			case *Mapper1, *Mapper2, *Mapper3, *Mapper7:
 				// do nothing
