@@ -215,7 +215,7 @@ func Run(paths []string) {
 			//
 			hash, err := hashFile(romPath)
 			if err != nil {
-				// [btw: should't there be error handling?]
+				// [btw: shouldn't there be error handling?]
 			} else {
 				filename := thumbnailPath(hash)
 				if _, err := os.Stat(filename); os.IsNotExist(err) {
