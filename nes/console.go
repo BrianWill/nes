@@ -129,7 +129,7 @@ func NewConsole(path string) (*Console, error) {
 	}
 	writeControlPPU(&ppu, 0)
 	writeMaskPPU(&ppu, 0)
-	ppu.oamAddress = byte(0)
+	ppu.oamAddress = 0
 	console.PPU = &ppu
 
 	return &console, nil
@@ -445,7 +445,7 @@ func StepSeconds(console *Console, seconds float64) {
 
 	stepAPU := func (apu *APU) {
 		stepEnvelope := func (apu *APU) {
-			pulseStepEvelope := func (p *Pulse) {
+			pulseStepEnvelope := func (p *Pulse) {
 				if p.envelopeStart {
 					p.envelopeVolume = 15
 					p.envelopeValue = p.envelopePeriod
@@ -461,8 +461,8 @@ func StepSeconds(console *Console, seconds float64) {
 					p.envelopeValue = p.envelopePeriod
 				}
 			}
-			pulseStepEvelope(&apu.pulse1)
-			pulseStepEvelope(&apu.pulse2)
+			pulseStepEnvelope(&apu.pulse1)
+			pulseStepEnvelope(&apu.pulse2)
 
 			t := &apu.triangle
 			if t.counterReload {
@@ -748,7 +748,7 @@ func StepSeconds(console *Console, seconds float64) {
 				cpuCycles = int(cpu.Cycles - startCycles)
 			}
 		}
-
+		
 		ppuCycles := cpuCycles * 3
 		for i := 0; i < ppuCycles; i++ {
 			stepPPU(console.PPU)

@@ -140,7 +140,7 @@ type PPU struct {
     // storage variables
     paletteData   [32]byte
     nameTableData [2048]byte
-    oamData       [256]byte
+    oamData       [256]byte   // Object Attribute Memory
     front         *image.RGBA
     back          *image.RGBA
 
@@ -345,9 +345,8 @@ const (
     modeZeroPageY
 )
 
-
-// probably more efficient to put these data into parallel arrays, but seems like a non-issue for now
 var instructions = [256]Instruction{
+    // don't really need .Opcode but makes the list more readable
     Instruction{Opcode: 0, Name: "BRK", Mode: 6, Size: 1, Cycles: 7, PageCycles: 0},
     Instruction{Opcode: 1, Name: "ORA", Mode: 7, Size: 2, Cycles: 6, PageCycles: 0},
     Instruction{Opcode: 2, Name: "KIL", Mode: 6, Size: 0, Cycles: 2, PageCycles: 0},
