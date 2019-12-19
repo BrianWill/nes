@@ -18,7 +18,6 @@ import (
 	"github.com/go-gl/glfw/v3.1/glfw"
 )
 
-
 func thumbnailURL(hash string) string {
 	return "http://www.michaelfogleman.com/static/nes/" + hash + ".png"
 }

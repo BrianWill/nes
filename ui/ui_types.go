@@ -2,9 +2,9 @@ package ui
 
 import (
 	"image"
-	"runtime"
 	"log"
 	"os/user"
+	"runtime"
 
 	"github.com/BrianWill/nes/nes"
 	"github.com/go-gl/glfw/v3.1/glfw"
@@ -19,62 +19,62 @@ func (_ *GameView) View() {}
 func (_ *MenuView) View() {}
 
 type Director struct {
-	window *glfw.Window
-	audio *Audio
-	view View
-	menuView MenuView
+	window    *glfw.Window
+	audio     *Audio
+	view      View
+	menuView  MenuView
 	timestamp float64
 }
 
 type Audio struct {
-	stream *portaudio.Stream
+	stream  *portaudio.Stream
 	channel chan float32
 }
 
 type Texture struct {
 	texture uint32
-	lookup map[string]int
+	lookup  map[string]int
 	reverse [textureCount]string
-	access [textureCount]int
+	access  [textureCount]int
 	counter int
-	ch chan string
+	ch      chan string
 }
 
 type GameView struct {
 	console *nes.Console
-	title string
-	hash string
+	title   string
+	hash    string
 	texture uint32
-	record bool
-	frames []image.Image
+	record  bool
+	frames  []image.Image
 }
 
 type MenuView struct {
-	paths []string
-	texture *Texture
+	paths        []string
+	texture      *Texture
 	nx, ny, i, j int
-	scroll int
-	t float64
-	buttons [8]bool
-	times [8]float64
-	typeBuffer string
-	typeTime float64
+	scroll       int
+	t            float64
+	buttons      [8]bool
+	times        [8]float64
+	typeBuffer   string
+	typeTime     float64
 }
 
 const (
-	textureSize = 4096
-	textureDim = textureSize / 256
+	textureSize  = 4096
+	textureDim   = textureSize / 256
 	textureCount = textureDim * textureDim
-	padding = 0
-	border = 10
-	margin = 10
+	padding      = 0
+	border       = 10
+	margin       = 10
 	initialDelay = 0.3
-	repeatDelay = 0.1
-	typeDelay = 0.5
-	width  = 256
-	height = 240
-	scale  = 3
-	title  = "NES"
+	repeatDelay  = 0.1
+	typeDelay    = 0.5
+	width        = 256
+	height       = 240
+	scale        = 3
+	title        = "NES"
 )
 
 var fontData = []byte{
@@ -150,7 +150,6 @@ var fontData = []byte{
 	0x42, 0x60, 0x82,
 }
 
-
 var homeDir string
 
 func init() {
@@ -167,4 +166,3 @@ func init() {
 	}
 	homeDir = u.HomeDir
 }
-
