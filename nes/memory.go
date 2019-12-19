@@ -3,7 +3,7 @@ package nes
 import "log"
 
 func readByte(console *Console, address uint16) byte {
-	readController := func (c *Controller) byte {
+	readController := func(c *Controller) byte {
 		value := byte(0)
 		if c.index < 8 && c.buttons[c.index] {
 			value = 1
@@ -18,7 +18,7 @@ func readByte(console *Console, address uint16) byte {
 	case address < 0x2000:
 		return console.RAM[address%0x0800]
 	case address < 0x4000:
-		return readPPURegister(console, 0x2000 + address%8)
+		return readPPURegister(console, 0x2000+address%8)
 	case address == 0x4014:
 		return readPPURegister(console, address)
 	case address == 0x4015:
@@ -60,15 +60,15 @@ func readByte(console *Console, address uint16) byte {
 }
 
 func writeByte(console *Console, address uint16, value byte) {
-	writeController := func (c *Controller, value byte) {
+	writeController := func(c *Controller, value byte) {
 		c.strobe = value
 		if c.strobe&1 == 1 {
 			c.index = 0
 		}
 	}
 
-	writeRegisterAPU :=  func (apu *APU, address uint16, value byte) {
-		pulseWriteControl := func (p *Pulse, value byte) {
+	writeRegisterAPU := func(apu *APU, address uint16, value byte) {
+		pulseWriteControl := func(p *Pulse, value byte) {
 			p.dutyMode = (value >> 6) & 3
 			p.lengthEnabled = (value>>5)&1 == 0
 			p.envelopeLoop = (value>>5)&1 == 1
@@ -77,14 +77,14 @@ func writeByte(console *Console, address uint16, value byte) {
 			p.constantVolume = value & 15
 			p.envelopeStart = true
 		}
-		pulseWriteSweep := func (p *Pulse, value byte) {
+		pulseWriteSweep := func(p *Pulse, value byte) {
 			p.sweepEnabled = (value>>7)&1 == 1
 			p.sweepPeriod = (value >> 4) & 7
 			p.sweepNegate = (value>>3)&1 == 1
 			p.sweepShift = value & 7
 			p.sweepReload = true
 		}
-		pulseWriteTimerHigh := func (p *Pulse, value byte) {
+		pulseWriteTimerHigh := func(p *Pulse, value byte) {
 			p.lengthValue = lengthTable[value>>3]
 			p.timerPeriod = (p.timerPeriod & 0x00FF) | (uint16(value&7) << 8)
 			p.envelopeStart = true
@@ -119,7 +119,7 @@ func writeByte(console *Console, address uint16, value byte) {
 			// write control
 			apu.dmc.irq = value&0x80 == 0x80
 			apu.dmc.loop = value&0x40 == 0x40
-			apu.dmc.tickPeriod = dmcTable[value & 0x0F]
+			apu.dmc.tickPeriod = dmcTable[value&0x0F]
 		case 0x4011:
 			// write value
 			apu.dmc.value = value & 0x7F
@@ -188,7 +188,7 @@ func writeByte(console *Console, address uint16, value byte) {
 		}
 	}
 
-	writeRegisterPPU := func (console *Console, address uint16, value byte) {
+	writeRegisterPPU := func(console *Console, address uint16, value byte) {
 		ppu := console.PPU
 		ppu.register = value
 		switch address {
@@ -292,7 +292,7 @@ func readPPU(console *Console, address uint16) byte {
 		mode := console.Cartridge.Mirror
 		return console.PPU.nameTableData[mirrorAddress(mode, address)%2048]
 	case address < 0x4000:
-		return readPalette(console.PPU, address % 32)
+		return readPalette(console.PPU, address%32)
 	default:
 		log.Fatalf("unhandled ppu memory read at address: 0x%04X", address)
 	}
@@ -309,7 +309,7 @@ func writePPU(console *Console, address uint16, value byte) {
 		console.PPU.nameTableData[mirrorAddress(mode, address)%2048] = value
 	case address < 0x4000:
 		// write palette
-		address := address%32
+		address := address % 32
 		if address >= 16 && address%4 == 0 {
 			address -= 16
 		}
@@ -318,7 +318,6 @@ func writePPU(console *Console, address uint16, value byte) {
 		log.Fatalf("unhandled ppu memory write at address: 0x%04X", address)
 	}
 }
-
 
 func readMapper(mapper Mapper, cartridge *Cartridge, address uint16) byte {
 	switch m := mapper.(type) {
@@ -401,10 +400,8 @@ func readMapper(mapper Mapper, cartridge *Cartridge, address uint16) byte {
 			log.Fatalf("unhandled mapper7 read at address: 0x%04X", address)
 		}
 	}
-	return 0  // unreachable
+	return 0 // unreachable
 }
-
-
 
 func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte) {
 	switch m := mapper.(type) {
@@ -419,11 +416,11 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 			//                    2: fix first bank at $8000 and switch 16 KB bank at $C000;
 			//                    3: fix last bank at $C000 and switch 16 KB bank at $8000)
 			// CHR ROM bank mode (0: switch 8 KB at a time; 1: switch two separate 4 KB banks)
-			updateOffsets1 := func (m *Mapper1) {
+			updateOffsets1 := func(m *Mapper1) {
 				switch m.prgMode {
 				case 0, 1:
-					m.prgOffsets[0] = prgBankOffset1(cartridge, int(m.prgBank & 0xFE))
-					m.prgOffsets[1] = prgBankOffset1(cartridge, int(m.prgBank | 0x01))
+					m.prgOffsets[0] = prgBankOffset1(cartridge, int(m.prgBank&0xFE))
+					m.prgOffsets[1] = prgBankOffset1(cartridge, int(m.prgBank|0x01))
 				case 2:
 					m.prgOffsets[0] = 0
 					m.prgOffsets[1] = prgBankOffset1(cartridge, int(m.prgBank))
@@ -432,7 +429,7 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 					m.prgOffsets[1] = prgBankOffset1(cartridge, -1)
 				}
 
-				chrBankOffset1 := func (m *Mapper1, index int) int {
+				chrBankOffset1 := func(m *Mapper1, index int) int {
 					if index >= 0x80 {
 						index -= 0x100
 					}
@@ -446,8 +443,8 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 
 				switch m.chrMode {
 				case 0:
-					m.chrOffsets[0] = chrBankOffset1(m, int(m.chrBank0 & 0xFE))
-					m.chrOffsets[1] = chrBankOffset1(m, int(m.chrBank0 | 0x01))
+					m.chrOffsets[0] = chrBankOffset1(m, int(m.chrBank0&0xFE))
+					m.chrOffsets[1] = chrBankOffset1(m, int(m.chrBank0|0x01))
 				case 1:
 					m.chrOffsets[0] = chrBankOffset1(m, int(m.chrBank0))
 					m.chrOffsets[1] = chrBankOffset1(m, int(m.chrBank1))
@@ -455,7 +452,7 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 			}
 
 			// Control (internal, $8000-$9FFF)
-			writeControl1 := func (m *Mapper1, value byte) {
+			writeControl1 := func(m *Mapper1, value byte) {
 				m.control = value
 				m.chrMode = (value >> 4) & 1
 				m.prgMode = (value >> 2) & 3
@@ -474,7 +471,7 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 
 			if value&0x80 == 0x80 {
 				m.shiftRegister = 0x10
-				writeControl1(m, m.control | 0x0C)
+				writeControl1(m, m.control|0x0C)
 				updateOffsets1(m)
 			} else {
 				complete := m.shiftRegister&1 == 1
@@ -484,11 +481,11 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 					switch {
 					case address <= 0x9FFF:
 						writeControl1(m, m.shiftRegister)
-					case address <= 0xBFFF:     // CHR bank 0 (internal, $A000-$BFFF)
+					case address <= 0xBFFF: // CHR bank 0 (internal, $A000-$BFFF)
 						m.chrBank0 = m.shiftRegister
-					case address <= 0xDFFF:     // CHR bank 1 (internal, $C000-$DFFF)
+					case address <= 0xDFFF: // CHR bank 1 (internal, $C000-$DFFF)
 						m.chrBank1 = m.shiftRegister
-					case address <= 0xFFFF:     // PRG bank (internal, $E000-$FFFF)
+					case address <= 0xFFFF: // PRG bank (internal, $E000-$FFFF)
 						m.prgBank = m.shiftRegister & 0x0F
 					}
 					updateOffsets1(m)
@@ -532,7 +529,7 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 			offset := address % 0x0400
 			cartridge.CHR[m.chrOffsets[bank]+int(offset)] = value
 		case address >= 0x8000:
-			updateOffsets4 := func (m *Mapper4) {
+			updateOffsets4 := func(m *Mapper4) {
 				switch m.prgMode {
 				case 0:
 					m.prgOffsets[0] = prgBankOffset4(cartridge, int(m.registers[6]))
@@ -546,7 +543,7 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 					m.prgOffsets[3] = prgBankOffset4(cartridge, -1)
 				}
 
-				chrBankOffset4 := func (m *Mapper4, index int) int {
+				chrBankOffset4 := func(m *Mapper4, index int) int {
 					if index >= 0x80 {
 						index -= 0x100
 					}
@@ -560,10 +557,10 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 
 				switch m.chrMode {
 				case 0:
-					m.chrOffsets[0] = chrBankOffset4(m, int(m.registers[0] & 0xFE))
-					m.chrOffsets[1] = chrBankOffset4(m, int(m.registers[0] | 0x01))
-					m.chrOffsets[2] = chrBankOffset4(m, int(m.registers[1] & 0xFE))
-					m.chrOffsets[3] = chrBankOffset4(m, int(m.registers[1] | 0x01))
+					m.chrOffsets[0] = chrBankOffset4(m, int(m.registers[0]&0xFE))
+					m.chrOffsets[1] = chrBankOffset4(m, int(m.registers[0]|0x01))
+					m.chrOffsets[2] = chrBankOffset4(m, int(m.registers[1]&0xFE))
+					m.chrOffsets[3] = chrBankOffset4(m, int(m.registers[1]|0x01))
 					m.chrOffsets[4] = chrBankOffset4(m, int(m.registers[2]))
 					m.chrOffsets[5] = chrBankOffset4(m, int(m.registers[3]))
 					m.chrOffsets[6] = chrBankOffset4(m, int(m.registers[4]))
@@ -573,10 +570,10 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 					m.chrOffsets[1] = chrBankOffset4(m, int(m.registers[3]))
 					m.chrOffsets[2] = chrBankOffset4(m, int(m.registers[4]))
 					m.chrOffsets[3] = chrBankOffset4(m, int(m.registers[5]))
-					m.chrOffsets[4] = chrBankOffset4(m, int(m.registers[0] & 0xFE))
-					m.chrOffsets[5] = chrBankOffset4(m, int(m.registers[0] | 0x01))
-					m.chrOffsets[6] = chrBankOffset4(m, int(m.registers[1] & 0xFE))
-					m.chrOffsets[7] = chrBankOffset4(m, int(m.registers[1] | 0x01))
+					m.chrOffsets[4] = chrBankOffset4(m, int(m.registers[0]&0xFE))
+					m.chrOffsets[5] = chrBankOffset4(m, int(m.registers[0]|0x01))
+					m.chrOffsets[6] = chrBankOffset4(m, int(m.registers[1]&0xFE))
+					m.chrOffsets[7] = chrBankOffset4(m, int(m.registers[1]|0x01))
 				}
 			}
 
@@ -590,7 +587,7 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 			case address <= 0x9FFF && address%2 == 1:
 				// write bank data
 				m.registers[m.register] = value
-				updateOffsets4(m)  
+				updateOffsets4(m)
 			case address <= 0xBFFF && address%2 == 0:
 				// write mirror
 				switch value & 1 {
@@ -603,7 +600,7 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 				// btw: think this was stubbed for something never implemented. anything important?
 			case address <= 0xDFFF && address%2 == 0:
 				// write IRQ latch
-				m.reload = value  
+				m.reload = value
 			case address <= 0xDFFF && address%2 == 1:
 				// write IRQ reload
 				m.counter = 0
@@ -640,7 +637,6 @@ func writeMapper(mapper Mapper, cartridge *Cartridge, address uint16, value byte
 	}
 }
 
-
 func prgBankOffset1(c *Cartridge, index int) int {
 	if index >= 0x80 {
 		index -= 0x100
@@ -652,7 +648,6 @@ func prgBankOffset1(c *Cartridge, index int) int {
 	}
 	return offset
 }
-
 
 func prgBankOffset4(c *Cartridge, index int) int {
 	if index >= 0x80 {
@@ -666,7 +661,6 @@ func prgBankOffset4(c *Cartridge, index int) int {
 	return offset
 }
 
-
 func mirrorAddress(mode byte, address uint16) uint16 {
 	address = (address - 0x2000) % 0x1000
 	table := address / 0x0400
@@ -674,14 +668,12 @@ func mirrorAddress(mode byte, address uint16) uint16 {
 	return 0x2000 + MirrorLookup[mode][table]*0x0400 + offset
 }
 
-
 func readPalette(ppu *PPU, address uint16) byte {
 	if address >= 16 && address%4 == 0 {
 		address -= 16
 	}
 	return ppu.paletteData[address]
 }
-
 
 func readPPURegister(console *Console, address uint16) byte {
 	ppu := console.PPU
@@ -710,7 +702,7 @@ func readPPURegister(console *Console, address uint16) byte {
 			ppu.bufferedData = value
 			value = buffered
 		} else {
-			ppu.bufferedData = readPPU(console, ppu.v - 0x1000)
+			ppu.bufferedData = readPPU(console, ppu.v-0x1000)
 		}
 		// increment address
 		if ppu.flagIncrement == 0 {
@@ -748,4 +740,3 @@ func writeMaskPPU(ppu *PPU, value byte) {
 	ppu.flagGreenTint = (value >> 6) & 1
 	ppu.flagBlueTint = (value >> 7) & 1
 }
-

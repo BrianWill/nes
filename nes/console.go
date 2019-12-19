@@ -1,10 +1,10 @@
 package nes
 
 import (
-	"image"
-	"fmt"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"image"
 	"io"
 	"os"
 )
@@ -13,7 +13,7 @@ func NewConsole(path string) (*Console, error) {
 	// read an iNES file (.nes) and returns a Cartridge on success.
 	// http://wiki.nesdev.com/w/index.php/INES
 	// http://nesdev.com/NESDoc.pdf (page 28)
-	cartridge, err := (func () (*Cartridge, error) {
+	cartridge, err := (func() (*Cartridge, error) {
 		// open file
 		file, err := os.Open(path)
 		if err != nil {
@@ -113,7 +113,7 @@ func NewConsole(path string) (*Console, error) {
 	cpu := CPU{}
 	console.CPU = &cpu
 	Reset(&console)
-	
+
 	apu := APU{}
 	apu.noise.shiftRegister = 1
 	apu.pulse1.channel = 1
@@ -121,11 +121,11 @@ func NewConsole(path string) (*Console, error) {
 	console.APU = &apu
 
 	ppu := PPU{
-		front: image.NewRGBA(image.Rect(0, 0, 256, 240)), 
-		back: image.NewRGBA(image.Rect(0, 0, 256, 240)),
-		Cycle: 340,
+		front:    image.NewRGBA(image.Rect(0, 0, 256, 240)),
+		back:     image.NewRGBA(image.Rect(0, 0, 256, 240)),
+		Cycle:    340,
 		ScanLine: 250,
-		Frame: 0,
+		Frame:    0,
 	}
 	writeControlPPU(&ppu, 0)
 	writeMaskPPU(&ppu, 0)
@@ -135,26 +135,25 @@ func NewConsole(path string) (*Console, error) {
 	return &console, nil
 }
 
-
 func StepSeconds(console *Console, seconds float64) {
 	// causes an IRQ interrupt to occur on the next cycle
-	triggerIRQ := func (cpu *CPU) {
+	triggerIRQ := func(cpu *CPU) {
 		if cpu.I == 0 {
 			cpu.interrupt = interruptIRQ
 		}
 	}
 
-	// executes a single PPU cycle	
-	stepPPU := func (ppu *PPU) {
+	// executes a single PPU cycle
+	stepPPU := func(ppu *PPU) {
 		// update Cycle, ScanLine and Frame counters
 		if ppu.nmiDelay > 0 {
 			ppu.nmiDelay--
 			if ppu.nmiDelay == 0 && ppu.nmiOutput && ppu.nmiOccurred {
-				console.CPU.interrupt = interruptNMI  // non-maskable interrupt on next cycle
+				console.CPU.interrupt = interruptNMI // non-maskable interrupt on next cycle
 			}
 		}
 		if (ppu.flagShowBackground != 0 || ppu.flagShowSprites != 0) &&
-				ppu.f == 1 && ppu.ScanLine == 261 && ppu.Cycle == 339 {
+			ppu.f == 1 && ppu.ScanLine == 261 && ppu.Cycle == 339 {
 			ppu.Cycle = 0
 			ppu.ScanLine = 0
 			ppu.Frame++
@@ -190,11 +189,11 @@ func StepSeconds(console *Console, seconds float64) {
 				// background pixel
 				background := byte(0)
 				if ppu.flagShowBackground != 0 {
-					data := uint32(ppu.tileData >> 32) >> ((7 - ppu.x) * 4)
-					background = byte(data & 0x0F)	
+					data := uint32(ppu.tileData>>32) >> ((7 - ppu.x) * 4)
+					background = byte(data & 0x0F)
 				}
 
-				spritePixel := func () (byte, byte) {
+				spritePixel := func() (byte, byte) {
 					if ppu.flagShowSprites == 0 {
 						return 0, 0
 					}
@@ -269,7 +268,7 @@ func StepSeconds(console *Console, seconds float64) {
 					table := ppu.flagBackgroundTable
 					tile := ppu.nameTableByte
 					address := 0x1000*uint16(table) + uint16(tile)*16 + fineY
-					ppu.highTileByte = readPPU(console, address + 8)
+					ppu.highTileByte = readPPU(console, address+8)
 				case 0:
 					// store tile data
 					var data uint32
@@ -389,8 +388,8 @@ func StepSeconds(console *Console, seconds float64) {
 							}
 							atts := (attributes & 3) << 2
 							lowTileByte := readPPU(console, address)
-							highTileByte := readPPU(console, address + 8)
-							
+							highTileByte := readPPU(console, address+8)
+
 							for i := 0; i < 8; i++ {
 								var p1, p2 byte
 								if attributes&0x40 == 0x40 {
@@ -436,16 +435,15 @@ func StepSeconds(console *Console, seconds float64) {
 			// clear vertical blank
 			ppu.nmiOccurred = false
 			nmiChangePPU(ppu)
-		
+
 			ppu.flagSpriteZeroHit = 0
 			ppu.flagSpriteOverflow = 0
 		}
 	}
 
-
-	stepAPU := func (apu *APU) {
-		stepEnvelope := func (apu *APU) {
-			pulseStepEnvelope := func (p *Pulse) {
+	stepAPU := func(apu *APU) {
+		stepEnvelope := func(apu *APU) {
+			pulseStepEnvelope := func(p *Pulse) {
 				if p.envelopeStart {
 					p.envelopeVolume = 15
 					p.envelopeValue = p.envelopePeriod
@@ -491,7 +489,7 @@ func StepSeconds(console *Console, seconds float64) {
 			}
 		}
 
-		stepLength := func (apu *APU)  {
+		stepLength := func(apu *APU) {
 			if apu.pulse1.lengthEnabled && apu.pulse1.lengthValue > 0 {
 				apu.pulse1.lengthValue--
 			}
@@ -512,8 +510,8 @@ func StepSeconds(console *Console, seconds float64) {
 
 		// step timers
 		{
-			if apu.cycle % 2 == 0 {
-				stepPulseTimer := func (p *Pulse) {
+			if apu.cycle%2 == 0 {
+				stepPulseTimer := func(p *Pulse) {
 					if p.timerValue == 0 {
 						p.timerValue = p.timerPeriod
 						p.dutyValue = (p.dutyValue + 1) % 8
@@ -560,7 +558,7 @@ func StepSeconds(console *Console, seconds float64) {
 
 					if d.tickValue == 0 {
 						d.tickValue = d.tickPeriod
-						
+
 						// step shifter
 						if d.bitCount != 0 {
 							if d.shiftRegister&1 == 1 {
@@ -591,15 +589,15 @@ func StepSeconds(console *Console, seconds float64) {
 				t.timerValue--
 			}
 		}
-		
+
 		f1 := int(float64(cycle1) / frameCounterRate)
 		f2 := int(float64(cycle2) / frameCounterRate)
 		if f1 != f2 {
 			// step frame counters:
 
-			stepSweep := func (apu *APU) {
-				pulseStepSweep := func (p *Pulse)  {
-					sweep := func (p *Pulse) {
+			stepSweep := func(apu *APU) {
+				pulseStepSweep := func(p *Pulse) {
+					sweep := func(p *Pulse) {
 						delta := p.timerPeriod >> p.sweepShift
 						if p.sweepNegate {
 							p.timerPeriod -= delta
@@ -670,7 +668,7 @@ func StepSeconds(console *Console, seconds float64) {
 		s2 := int(float64(cycle2) / sampleRate)
 		if s1 != s2 {
 			// pulse output
-			pulseOutput := func (p *Pulse) byte {
+			pulseOutput := func(p *Pulse) byte {
 				if !p.enabled || p.lengthValue == 0 || dutyTable[p.dutyMode][p.dutyValue] == 0 || p.timerPeriod < 8 || p.timerPeriod > 0x7FF {
 					return 0
 				} else if p.envelopeEnabled {
@@ -694,7 +692,7 @@ func StepSeconds(console *Console, seconds float64) {
 			// noise output
 			n := &apu.noise
 			var nOut byte
-			if !n.enabled || n.lengthValue == 0 || (n.shiftRegister & 1) == 1 {
+			if !n.enabled || n.lengthValue == 0 || (n.shiftRegister&1) == 1 {
 				nOut = 0
 			} else if n.envelopeEnabled {
 				nOut = n.envelopeVolume
@@ -705,7 +703,7 @@ func StepSeconds(console *Console, seconds float64) {
 			// dmc output
 			dOut := apu.dmc.value
 
-			output := tndTable[(3 * tOut) + (2 * nOut) + dOut] + pulseTable[p1Out + p2Out]
+			output := tndTable[(3*tOut)+(2*nOut)+dOut] + pulseTable[p1Out+p2Out]
 			select {
 			case apu.channel <- output:
 			default:
@@ -748,7 +746,7 @@ func StepSeconds(console *Console, seconds float64) {
 				cpuCycles = int(cpu.Cycles - startCycles)
 			}
 		}
-		
+
 		ppuCycles := cpuCycles * 3
 		for i := 0; i < ppuCycles; i++ {
 			stepPPU(console.PPU)
@@ -759,8 +757,8 @@ func StepSeconds(console *Console, seconds float64) {
 			case *Mapper4:
 				ppu := console.PPU
 				if ppu.Cycle == 280 &&
-						(ppu.ScanLine <= 239 || ppu.ScanLine >= 261) && 
-						(ppu.flagShowBackground != 0 || ppu.flagShowSprites != 0) {
+					(ppu.ScanLine <= 239 || ppu.ScanLine >= 261) &&
+					(ppu.flagShowBackground != 0 || ppu.flagShowSprites != 0) {
 					if m.counter == 0 {
 						m.counter = m.reload
 					} else {

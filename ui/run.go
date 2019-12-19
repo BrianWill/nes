@@ -1,14 +1,14 @@
 package ui
 
 import (
-	"log"
+	"bytes"
 	"image"
 	"image/color"
-	"image/png"
 	"image/draw"
-	"bytes"
-	"net/http"
+	"image/png"
 	"io"
+	"log"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -24,7 +24,7 @@ import (
 func Run(paths []string) {
 	var fontMask image.Image
 
-	clampScroll := func (v *MenuView, wrap bool) {
+	clampScroll := func(v *MenuView, wrap bool) {
 		n := len(v.paths)
 		rows := n / v.nx
 		if n%v.nx > 0 {
@@ -51,10 +51,10 @@ func Run(paths []string) {
 		}
 	}
 
-	setView := func (d *Director, view View) {
+	setView := func(d *Director, view View) {
 		// clean up previously used view
 		if d.view != nil {
-			switch v:= d.view.(type) {
+			switch v := d.view.(type) {
 			case *GameView:
 				d.window.SetKeyCallback(nil)
 				nes.SetAudioChannel(v.console, nil)
@@ -76,7 +76,7 @@ func Run(paths []string) {
 				d.window.SetTitle(v.title)
 				nes.SetAudioChannel(v.console, d.audio.channel)
 				d.window.SetKeyCallback(
-					func (window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
+					func(window *glfw.Window, key glfw.Key, scancode int, action glfw.Action, mods glfw.ModifierKey) {
 						if action == glfw.Press {
 							switch key {
 							case glfw.KeySpace:
@@ -106,7 +106,7 @@ func Run(paths []string) {
 				gl.ClearColor(0.333, 0.333, 0.333, 1)
 				d.window.SetTitle("Select Game")
 				d.window.SetCharCallback(
-					func (window *glfw.Window, char rune) {
+					func(window *glfw.Window, char rune) {
 						now := glfw.GetTime()
 						if now > v.typeTime {
 							v.typeBuffer = ""
@@ -131,8 +131,8 @@ func Run(paths []string) {
 	}
 
 	// returns index in .lookup
-	loadTexture := func (t *Texture, romPath string) int {
-		drawCenteredText := func (dst draw.Image, text string, dx, dy int, c color.Color) {
+	loadTexture := func(t *Texture, romPath string) int {
+		drawCenteredText := func(dst draw.Image, text string, dx, dy int, c color.Color) {
 			// split text into rows
 			const maxRowChars = 15
 			var rows []string
@@ -148,9 +148,9 @@ func Run(paths []string) {
 						row = word
 					}
 				}
-				rows = append(rows, row)	
+				rows = append(rows, row)
 			}
-			
+
 			// draw all rows
 			for i, row := range rows {
 				x := 128 - len(row)*8 + dx
@@ -164,9 +164,9 @@ func Run(paths []string) {
 						r := image.Rect(x, y, x+16, y+16)
 						src := &image.Uniform{c}
 						sp := image.Pt(cx, cy)
-						draw.DrawMask(dst, r, src, sp, fontMask, sp, draw.Over)	
+						draw.DrawMask(dst, r, src, sp, fontMask, sp, draw.Over)
 					}
-					
+
 					x += 16
 				}
 			}
@@ -191,7 +191,7 @@ func Run(paths []string) {
 		// mark texture [btw: to keep track of least frequently used?]
 		t.counter++
 		t.access[index] = t.counter
-		
+
 		t.lookup[romPath] = index
 		t.reverse[index] = romPath
 		x := int32((index % textureDim) * 256)
@@ -219,7 +219,7 @@ func Run(paths []string) {
 			} else {
 				filename := thumbnailPath(hash)
 				if _, err := os.Stat(filename); os.IsNotExist(err) {
-					go (func (t *Texture, romPath, hash string) error {
+					go (func(t *Texture, romPath, hash string) error {
 						url := thumbnailURL(hash)
 						filename := thumbnailPath(hash)
 						dir, _ := path.Split(filename)
@@ -253,7 +253,7 @@ func Run(paths []string) {
 					if err != nil {
 						// [btw: should't there be error handling?]
 					} else {
-						im = thumbnail	
+						im = thumbnail
 					}
 				}
 			}
@@ -267,7 +267,7 @@ func Run(paths []string) {
 		return index
 	}
 
-	playGame := func (d *Director, path string) {
+	playGame := func(d *Director, path string) {
 		hash, err := hashFile(path)
 		if err != nil {
 			log.Fatalln(err)
@@ -279,7 +279,6 @@ func Run(paths []string) {
 		setView(d, &GameView{console, path, hash, createTexture(), false, nil})
 	}
 
-
 	// initialize audio
 	portaudio.Initialize()
 	defer portaudio.Terminate()
@@ -290,7 +289,7 @@ func Run(paths []string) {
 	}
 	stream, err := portaudio.OpenStream(
 		portaudio.HighLatencyParameters(nil, host.DefaultOutputDevice),
-		func (out []float32) {
+		func(out []float32) {
 			for i := range out {
 				select {
 				case sample := <-audio.channel:
@@ -318,7 +317,7 @@ func Run(paths []string) {
 
 	// initialize fontMask
 	{
-		im, err := png.Decode(bytes.NewBuffer(fontData))	
+		im, err := png.Decode(bytes.NewBuffer(fontData))
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -353,7 +352,7 @@ func Run(paths []string) {
 	// run director
 	d := &Director{window: window, audio: audio}
 	{
-		d.menuView = MenuView{paths: paths}	
+		d.menuView = MenuView{paths: paths}
 		texture := createTexture()
 		gl.BindTexture(gl.TEXTURE_2D, texture)
 		gl.TexImage2D(
@@ -427,7 +426,7 @@ func Run(paths []string) {
 					gl.Vertex2f(-x, y)
 					gl.End()
 				}
-				gl.BindTexture(gl.TEXTURE_2D, 0)  // btw: not sure this serves any purpose?
+				gl.BindTexture(gl.TEXTURE_2D, 0) // btw: not sure this serves any purpose?
 				if v.record {
 					v.frames = append(v.frames, copyImage(nes.Buffer(v.console)))
 				}
@@ -439,7 +438,7 @@ func Run(paths []string) {
 					j2 := readJoystick(glfw.Joystick2, false)
 					buttons := combineButtons(combineButtons(j1, j2), k1)
 					now := glfw.GetTime()
-					onPress := func (index int) {
+					onPress := func(index int) {
 						switch index {
 						case nes.ButtonUp:
 							v.j--
@@ -476,7 +475,7 @@ func Run(paths []string) {
 					v.buttons = buttons
 				}
 				// purge texture [btw: what texture though?]
-				purge: 
+			purge:
 				for {
 					select {
 					case path := <-v.texture.ch:
@@ -542,7 +541,7 @@ func Run(paths []string) {
 						ty := float32(index/textureDim) / textureDim
 						tw := float32(1.0) / textureDim
 						th := tw * 240 / 256
-						
+
 						// draw thumbnail
 						sx := x + 4
 						sy := y + 4
@@ -569,7 +568,7 @@ func Run(paths []string) {
 					}
 				}
 				gl.BindTexture(gl.TEXTURE_2D, 0)
-				if int((timestamp - v.t)*4)%2 == 0 {
+				if int((timestamp-v.t)*4)%2 == 0 {
 					// draw selection
 					x := float32(ox + v.i*sx)
 					y := float32(oy + v.j*sy)

@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	getPaths := func () []string {
+	getPaths := func() []string {
 		var arg string
 		args := os.Args[1:]
 		if len(args) == 1 {
@@ -49,4 +49,3 @@ func main() {
 	}
 	ui.Run(paths)
 }
-
